@@ -1,0 +1,31 @@
+actions:
+- name: createPrintJob
+  definition:
+    kind: synchronous
+    handler: '{{DAILYOS_SERVER_URL}}/server/api/printer/print'
+- name: printJobs
+  definition:
+    kind: ""
+    handler: '{{DAILYOS_SERVER_URL}}/server/api/printer/print/jobs'
+- name: processRewards
+  definition:
+    kind: synchronous
+    handler: '{{DAILYOS_SERVER_URL}}/server/api/rewards/process'
+- name: sendEmail
+  definition:
+    kind: synchronous
+    handler: '{{DAILYOS_SERVER_URL}}/server/api/sendmail'
+custom_types:
+  enums: []
+  input_objects:
+  - name: EmailInput
+  - name: Attachment
+  objects:
+  - name: Menu
+  - name: PrintResponse
+  - name: PrintJobs
+  - name: EmailOutput
+  - name: GiveRewardsResponse
+  - name: PrintNode
+  - name: ProcessRewardsResponse
+  scalars: []

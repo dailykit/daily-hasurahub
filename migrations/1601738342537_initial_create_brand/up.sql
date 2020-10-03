@@ -1,0 +1,190 @@
+INSERT INTO
+   brands."brand" ("title", "isDefault", "isPublished", "onDemandRequested", "subscriptionRequested") 
+VALUES
+   (
+      'Default', true, true, true, true
+   )
+;
+-- INSERT INTO
+--   brands."brands_subscriptionStoreSetting" (type, identifier) 
+-- VALUES
+--   (
+--       'Visual', 'priceDisplay'
+--   )
+-- , 
+--   (
+--       'Visual', 'theme-color'
+--   )
+-- , 
+--   (
+--       'brand', 'theme-brand'
+--   )
+-- , 
+--   (
+--       'conventions', 'primary-labels'
+--   )
+-- , 
+--   (
+--       'Navigation', 'navbar'
+--   )
+-- , 
+--   (
+--       'conventions', 'steps-labels'
+--   )
+-- , 
+--   (
+--       'Select-Plan', 'subscription-metadetails'
+--   )
+-- , 
+--   (
+--       'Select-Plan', 'select-plan-header'
+--   )
+-- , 
+--   (
+--       'Register', 'register-background'
+--   )
+-- , 
+--   (
+--       'Select-Delivery', 'select-delivery-background'
+--   )
+-- , 
+--   (
+--       'Select-Delivery', 'address'
+--   )
+-- , 
+--   (
+--       'Select-Delivery', 'delivery-day'
+--   )
+-- , 
+--   (
+--       'Select-Delivery', 'first-delivery'
+--   )
+-- , 
+--   (
+--       'Select-Menu', 'select-menu-header'
+--   )
+-- , 
+--   (
+--       'availability', 'Location'
+--   )
+-- , 
+--   (
+--       'brand', 'Contact'
+--   )
+-- ;
+-- INSERT INTO
+--   brands."brand_subscriptionStoreSetting" ("subscriptionStoreSettingId", value) 
+-- VALUES
+--   (
+--       1, 1, '{"pricePerPlan":{"prefix":"Total Price","suffix":"per week","isVisible":true},"pricePerServing":{"prefix":"Starting  From","suffix":"per serving","isVisible":true}}' 
+--   )
+-- , 
+--   (
+--       1, 2, '{"accent":"#38a169","highlight":"#0a8acf"}' 
+--   )
+-- , 
+--   (
+--       1, 3, '{"logo":{"url":"https://dailykit-133-test.s3.amazonaws.com/images/1594624453166.png","logoMark":"https://dailykit-133-test.s3.amazonaws.com/images/1596121558382.png","wordMark":"https://dailykit-133-test.s3.amazonaws.com/images/1594373838496.png"},"name":"Subscription Shop","favicon":"https://dailykit-133-test.s3.amazonaws.com/images/1592478064798.jpg","metaDescription":"A subscription based food service"}' 
+--   )
+-- , 
+--   (
+--       1, 4, '{"login":"Login","logout":"Logout","signup":"Get Started","itemLabel":{"plural":"recipes","singular":"recipe"},"yieldLabel":{"plural":"people","singular":"person"}}' 
+--   )
+-- , 
+--   (
+--       1, 6, '{"checkout":"Check Out","register":"Register","selectMenu":"Select Menu","selectDelivery":"Select Delivery"}' 
+--   )
+-- , 
+--   (
+--       1, 7, '{"selectButtonLabel":"Select","subscriptionTitle":{"thumbnail":false,"description":false},"subscriptionYield":{"information":"Select one"},"subscriptionItemCount":{"total":true,"perServing":true}}' 
+--   )
+-- , 
+--   (
+--       1, 9, '{"background":{"color":"#e0e9e8","image":""}}' 
+--   )
+-- , 
+--   (
+--       1, 10, '{"background":{"color":"#e4e4e4","image":"https://dailykit-133-test.s3.amazonaws.com/images/13699-4-3.jpg"}}' 
+--   )
+-- , 
+--   (
+--       1, 11, '{"title":"Select Delivery Address","description":"Choose the delivery address you want the food delivered to"}' 
+--   )
+-- , 
+--   (
+--       1, 12, '{"title":"Select Delivery Day","description":"Choose the day you the deliveries on"}' 
+--   )
+-- , 
+--   (
+--       1, 13, '{"title":"Select First Delivery","description":"Choose first delivery date"}' 
+--   )
+-- , 
+--   (
+--       1, 15, '{"lat":"33.8042896","lng":"-118.1709438","city":"Signal Hill","line1":"1700 East Willow Street","line2":"","state":"California","country":"United States","zipcode":"90755"}' 
+--   )
+-- , 
+--   (
+--       1, 16, '{"email":"test@dailykit.org","phoneNo":"+13124215900"}'
+--   );
+--   INSERT INTO
+--       brands."storeSettings" (type, identifier) 
+--   VALUES
+--       1 ("brand", "Brand Logo"), 2 ("visual", "Favicon"), 3 ("visual", "App Title"), 4 ("availability", "Store Availability"), 5 ("brand", "Brand Name"), 6 ("availability", "Pickup Availability"), 7 ("availability", "Delivery Availability"), 8 ("visual", "Primary Color"), 9 ("brand", "Contact"), 10 ("availability", "Location"), 11 ("visual", "Slides"), 12 ("sales", "Food Cost Percent"), 13 ("email", "Email Notification"), 14 ("availability", "Store Live") 
+--       INSERT INTO
+--          brands."brands_brand_storeSetting" ("brandId", "storeSettingId", value) 
+--       VALUES
+--          (
+--             1, 1, '{"url":"https://dailykit-133-test.s3.amazonaws.com/images/1596121558382.png"}'
+--          )
+-- , 
+--          (
+--             1, 2, '{"url":"https://dailykit-133-test.s3.amazonaws.com/images/1594373838496.png"}'
+--          )
+-- , 
+--          (
+--             1, 3, '{"title":"Test Store"}'
+--          )
+-- , 
+--          (
+--             1, 4, '{"to":"23:59","from":"00:01","isOpen":true,"shutMessage":"Will Never Open Again"}'
+--          )
+-- , 
+--          (
+--             1, 5, '{"name":"DailyKIT Store 1"}'
+--          )
+-- , 
+--          (
+--             1, 6, '{"isAvailable":true}'
+--          )
+-- , 
+--          (
+--             1, 7, '{"isAvailable":true}'
+--          )
+-- , 
+--          (
+--             1, 8, '{"color":"#798402"}'
+--          )
+-- , 
+--          (
+--             1, 9, '{"email":"test@dailykit.org","phoneNo":"+13124215900"}'
+--          )
+-- , 
+--          (
+--             1, 10, '{"lat":"33.8040277","lng":"-118.1700129","city":"Signal Hill","line1":"1798 East Willow Street","line2":"Opp. Blue Bird Store","state":"California","country":"United States","zipcode":"90755"}'
+--          )
+-- , 
+--          (
+--             1, 11, '[{"url":"https://images.unsplash.com/photo-1496412705862-e0088f16f791?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1050&q=80"},{"url":"https://dailykit-133-test.s3.amazonaws.com/images/13699-4-3.jpg"}]'
+--          )
+-- , 
+--          (
+--             1, 12, '{"lowerLimit":30,"upperLimit":50}'
+--          )
+-- , 
+--          (
+--             1, 13, '{"name":"Test","email":"no-reply@dailykit.org","template":{"data":{"id":"{{new.id}}"},"template":{"name":"bill1","type":"bill","format":"html"}}}'
+--          )
+-- , 
+--          (
+--             1, 14, '{"isStoreLive":false,"isStripeConfigured":true}'
+--          );
