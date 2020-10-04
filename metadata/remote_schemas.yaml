@@ -1,6 +1,6 @@
 - name: dailycloak
   definition:
-    url: https://dailycloak.herokuapp.com/v1/graphql
+    url: https://dailycloak.dailykit.org/v1/graphql
     timeout_seconds: 60
     headers:
     - name: Organization-Id

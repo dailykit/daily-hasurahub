@@ -1,5 +1,5 @@
 version: 2
-endpoint: https://test.dailykit.org/datahub
+endpoint: https://try2.dailykit.org/datahub
 metadata_directory: metadata
 actions:
    kind: synchronous

@@ -5033,7 +5033,7 @@ END;
 $$;
 CREATE TABLE brands.brand (
     id integer NOT NULL,
-    domain text NOT NULL,
+    domain text,
     "isDefault" boolean DEFAULT false NOT NULL,
     title text,
     "isPublished" boolean DEFAULT true NOT NULL,
@@ -5043,7 +5043,7 @@ CREATE TABLE brands.brand (
 CREATE TABLE brands."brand_storeSetting" (
     "brandId" integer NOT NULL,
     "storeSettingId" integer NOT NULL,
-    value jsonb NOT NULL
+    value jsonb
 );
 CREATE TABLE brands."brand_subscriptionStoreSetting" (
     "brandId" integer NOT NULL,
@@ -5061,7 +5061,7 @@ ALTER SEQUENCE brands.shop_id_seq OWNED BY brands.brand.id;
 CREATE TABLE brands."storeSetting" (
     id integer NOT NULL,
     identifier text NOT NULL,
-    value jsonb NOT NULL,
+    value jsonb,
     type text
 );
 CREATE SEQUENCE brands."storeSetting_id_seq"
@@ -5075,7 +5075,7 @@ ALTER SEQUENCE brands."storeSetting_id_seq" OWNED BY brands."storeSetting".id;
 CREATE TABLE brands."subscriptionStoreSetting" (
     id integer NOT NULL,
     identifier text NOT NULL,
-    value jsonb NOT NULL,
+    value jsonb,
     type text
 );
 CREATE SEQUENCE brands."subscriptionStoreSetting_id_seq"
