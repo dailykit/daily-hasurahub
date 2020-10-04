@@ -4,8 +4,8 @@ INSERT INTO settings.app (title) VALUES
 ,('Inventory App')
 ,('Subscription App')
 ,('CRM App')
-,('Safety App')
 ,('Settings App')
+,('Safety App')
 ,('Online Store')
 ,('Brand App')
 ;
