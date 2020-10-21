@@ -14,6 +14,20 @@
       update_by_pk: updateBrand
     custom_column_names: {}
   array_relationships:
+  - name: brand_campaigns
+    using:
+      foreign_key_constraint_on:
+        column: brandId
+        table:
+          schema: crm
+          name: brand_campaign
+  - name: brand_coupons
+    using:
+      foreign_key_constraint_on:
+        column: brandId
+        table:
+          schema: crm
+          name: brand_coupon
   - name: collections
     using:
       foreign_key_constraint_on:
@@ -684,6 +698,18 @@
       function:
         schema: crm
         name: discount
+    comment: ""
+  - name: loyaltyPointsUsable
+    definition:
+      function:
+        schema: crm
+        name: loyaltyPointsUsable
+    comment: ""
+  - name: walletAmountUsable
+    definition:
+      function:
+        schema: crm
+        name: walletAmountUsable
     comment: ""
   remote_relationships:
   - definition:
@@ -1406,6 +1432,9 @@
   - name: labelTemplate
     using:
       foreign_key_constraint_on: labelTemplateId
+  - name: operationConfig
+    using:
+      foreign_key_constraint_on: operationConfigId
   - name: packaging
     using:
       foreign_key_constraint_on: packagingId
@@ -3512,6 +3541,18 @@
         schema: products
         name: isinventoryproductvalid
     comment: ""
+  - name: allergens
+    definition:
+      function:
+        schema: products
+        name: inventoryProductAllergens
+    comment: ""
+  - name: nutritionalInfo
+    definition:
+      function:
+        schema: products
+        name: inventoryProductNutrition
+    comment: ""
 - table:
     schema: products
     name: inventoryProductOption
@@ -3537,6 +3578,9 @@
   - name: modifier
     using:
       foreign_key_constraint_on: modifierId
+  - name: operationConfig
+    using:
+      foreign_key_constraint_on: operationConfigId
   - name: packaging
     using:
       foreign_key_constraint_on: packagingId
@@ -3654,6 +3698,9 @@
   - name: modifier
     using:
       foreign_key_constraint_on: modifierId
+  - name: operationConfig
+    using:
+      foreign_key_constraint_on: operationConfigId
   - name: packaging
     using:
       foreign_key_constraint_on: packagingId
@@ -4396,6 +4443,12 @@
       function:
         schema: simpleRecipe
         name: yieldCost
+    comment: ""
+  - name: allergens
+    definition:
+      function:
+        schema: simpleRecipe
+        name: yieldAllergens
     comment: ""
 - table:
     schema: simpleRecipe
