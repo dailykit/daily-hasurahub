@@ -1045,6 +1045,10 @@ CREATE CAST (jsonb AS _rrule.RRULE)
 CREATE CAST (_rrule.RRULE AS jsonb)
   WITH FUNCTION _rrule.rrule_to_jsonb(_rrule.RRULE)
   AS IMPLICIT;
+					 
+CREATE CAST (jsonb AS _rrule.RRULESET)
+  WITH FUNCTION _rrule.jsonb_to_rruleset(jsonb)
+  AS IMPLICIT;
 
 
 CREATE FUNCTION crm."checkProductTypeInOrderCart"(producttype text, cartinfo jsonb) RETURNS boolean
