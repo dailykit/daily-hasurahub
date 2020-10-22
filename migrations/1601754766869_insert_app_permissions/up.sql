@@ -7,7 +7,7 @@ INSERT INTO settings."appPermission" ("appId",route,title,"fallbackMessage") VAL
 ,(1,'planned/inventory','ROUTE_READ','You do not have sufficient permission to see planned inventory details.')
 ,(1,'home','ROUTE_READ','You do not have sufficient permission to see order app.')
 -- Recipe App
-,(2,'home','ROUTE_READ','You do not have sufficient permission to see recipe app.')
+,(2,'home','ROUTE_READ','You do not have sufficient permission to see products app.')
 ,(2,'recipes','ROUTE_READ','You do not have sufficient permission to see recipes listing.')
 ,(2,'recipe','ROUTE_READ','You do not have sufficient permission to see recipe details.')
 ,(2,'ingredients','ROUTE_READ','You do not have sufficient permission to see ingredients listing.')

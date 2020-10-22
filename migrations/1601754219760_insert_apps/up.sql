@@ -1,11 +1,11 @@
 INSERT INTO settings.app (title) VALUES 
 ('Order App')
-,('Recipe App')
+,('Products App')
 ,('Inventory App')
 ,('Subscription App')
 ,('CRM App')
 ,('Settings App')
 ,('Safety App')
-,('Online Store')
+,('Menu App')
 ,('Brand App')
 ;
