@@ -72,7 +72,7 @@ NULL,
              'INSERT', 
              '{}', 
              true, 
-'{"title": "A new order placed by {{new.deliveryInfo.dropoff.dropoffInfo.customerFirstName}} {{new.deliveryInfo.dropoff.dropoffInfo.customerLastName}}.", "action": {"url": "/order/orders/{{new.id}}"}, "description": "Order Id: {{new.id}} of amount {{new.currency}}{{new.itemTotal}}."}' 
+'{"title": "A new order placed by {{new.deliveryInfo.dropoff.dropoffInfo.customerFirstName}} {{new.deliveryInfo.dropoff.dropoffInfo.customerLastName}}.", "action": {"url": "/apps/order/orders/{{new.id}}"}, "description": "Order Id: {{new.id}} of amount {{new.currency}}{{new.itemTotal}}."}' 
              , 
 true, 
 true, 

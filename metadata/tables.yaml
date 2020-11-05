@@ -28,6 +28,13 @@
         table:
           schema: crm
           name: brand_coupon
+  - name: brand_paymentPartnerships
+    using:
+      foreign_key_constraint_on:
+        column: brandId
+        table:
+          schema: brands
+          name: brand_paymentPartnership
   - name: collections
     using:
       foreign_key_constraint_on:
@@ -63,6 +70,25 @@
         table:
           schema: subscription
           name: brand_subscriptionTitle
+- table:
+    schema: brands
+    name: brand_paymentPartnership
+  object_relationships:
+  - name: brand
+    using:
+      foreign_key_constraint_on: brandId
+  remote_relationships:
+  - definition:
+      remote_field:
+        paymentHub_paymentPartnership:
+          arguments:
+            where:
+              id:
+                _eq: $paymentPartnershipId
+      hasura_fields:
+      - paymentPartnershipId
+      remote_schema: dailycloak
+    name: paymentPartnership
 - table:
     schema: brands
     name: brand_storeSetting
@@ -721,6 +747,28 @@
       - paymentMethodId
       remote_schema: dailykey
     name: paymentCard
+  - definition:
+      remote_field:
+        paymentHub_payment:
+          arguments:
+            where:
+              orderCartId:
+                _eq: $id
+      hasura_fields:
+      - id
+      remote_schema: dailycloak
+    name: attemptedPayments
+  - definition:
+      remote_field:
+        paymentHub_payment:
+          arguments:
+            where:
+              id:
+                _eq: $paymentId
+      hasura_fields:
+      - paymentId
+      remote_schema: dailycloak
+    name: payment
   event_triggers:
   - name: initiateOrder
     definition:
@@ -1057,6 +1105,18 @@
 - table:
     schema: fulfilment
     name: brand_recurrence
+  configuration:
+    custom_root_fields:
+      insert: createBrandRecurrences
+      select_aggregate: brandRecurrencesAggregate
+      insert_one: createBrandRecurrence
+      select_by_pk: brandRecurrence
+      select: brandRecurrences
+      delete: deleteBrandRecurrences
+      update: updateBrandRecurrences
+      delete_by_pk: deleteBrandRecurrence
+      update_by_pk: updateBrandRecurrence
+    custom_column_names: {}
   object_relationships:
   - name: brand
     using:

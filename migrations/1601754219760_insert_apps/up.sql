@@ -8,4 +8,5 @@ INSERT INTO settings.app (title) VALUES
 ,('Safety App')
 ,('Menu App')
 ,('Brand App')
+,('Insights App')
 ;
