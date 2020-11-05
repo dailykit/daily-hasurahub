@@ -1,3 +1,4 @@
+CREATE SCHEMA _rrule;
 CREATE SCHEMA brands;
 CREATE SCHEMA content;
 CREATE SCHEMA crm;
@@ -20,242 +21,88 @@ CREATE SCHEMA settings;
 CREATE SCHEMA "simpleRecipe";
 CREATE SCHEMA staff;
 CREATE SCHEMA subscription;
-
-DROP SCHEMA IF EXISTS _rrule CASCADE;
-
-DROP CAST IF EXISTS (_rrule.RRULE AS TEXT);
-DROP CAST IF EXISTS (TEXT AS _rrule.RRULE);
-
-CREATE SCHEMA _rrule;
-
-CREATE TYPE _rrule.FREQ AS ENUM (
-  'YEARLY',
-  'MONTHLY',
-  'WEEKLY',
-  'DAILY'
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
+COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
+CREATE TYPE _rrule.day AS ENUM (
+    'MO',
+    'TU',
+    'WE',
+    'TH',
+    'FR',
+    'SA',
+    'SU'
 );
-
-CREATE TYPE _rrule.DAY AS ENUM (
-  'MO',
-  'TU',
-  'WE',
-  'TH',
-  'FR',
-  'SA',
-  'SU'
-);
-
-
-CREATE TABLE _rrule.RRULE (
-  "freq" _rrule.FREQ NOT NULL,
-  "interval" INTEGER DEFAULT 1 NOT NULL CHECK(0 < "interval"),
-  "count" INTEGER,
-  "until" TIMESTAMP,
-  "bysecond" INTEGER[] CHECK (0 <= ALL("bysecond") AND 60 > ALL("bysecond")),
-  "byminute" INTEGER[] CHECK (0 <= ALL("byminute") AND 60 > ALL("byminute")),
-  "byhour" INTEGER[] CHECK (0 <= ALL("byhour") AND 24 > ALL("byhour")),
-  "byday" _rrule.DAY[],
-  "bymonthday" INTEGER[] CHECK (31 >= ALL("bymonthday") AND 0 <> ALL("bymonthday") AND -31 <= ALL("bymonthday")),
-  "byyearday" INTEGER[] CHECK (366 >= ALL("byyearday") AND 0 <> ALL("byyearday") AND -366 <= ALL("byyearday")),
-  "byweekno" INTEGER[] CHECK (53 >= ALL("byweekno") AND 0 <> ALL("byweekno") AND -53 <= ALL("byweekno")),
-  "bymonth" INTEGER[] CHECK (0 < ALL("bymonth") AND 12 >= ALL("bymonth")),
-  "bysetpos" INTEGER[] CHECK(366 >= ALL("bysetpos") AND 0 <> ALL("bysetpos") AND -366 <= ALL("bysetpos")),
-  "wkst" _rrule.DAY,
-
-  CONSTRAINT freq_yearly_if_byweekno CHECK("freq" = 'YEARLY' OR "byweekno" IS NULL)
-);
-
-
-CREATE TABLE _rrule.RRULESET (
-  "dtstart" TIMESTAMP NOT NULL,
-  "dtend" TIMESTAMP,
-  "rrule" _rrule.RRULE,
-  "exrule" _rrule.RRULE,
-  "rdate" TIMESTAMP[],
-  "exdate" TIMESTAMP[]
-);
-
-
 CREATE TYPE _rrule.exploded_interval AS (
-  "months" INTEGER,
-  "days" INTEGER,
-  "seconds" INTEGER
-);CREATE OR REPLACE FUNCTION _rrule.explode_interval(INTERVAL)
-RETURNS _rrule.EXPLODED_INTERVAL AS $$
-  SELECT
-    (
-      EXTRACT(YEAR FROM $1) * 12 + EXTRACT(MONTH FROM $1),
-      EXTRACT(DAY FROM $1),
-      EXTRACT(HOUR FROM $1) * 3600 + EXTRACT(MINUTE FROM $1) * 60 + EXTRACT(SECOND FROM $1)
-    )::_rrule.EXPLODED_INTERVAL;
-
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-
-
-CREATE OR REPLACE FUNCTION _rrule.factor(INTEGER, INTEGER)
-RETURNS INTEGER AS $$
-  SELECT
-    CASE
-      WHEN ($1 = 0 AND $2 = 0) THEN NULL
-      WHEN ($1 = 0 OR $2 = 0) THEN 0
-      WHEN ($1 % $2 <> 0) THEN 0
-      ELSE $1 / $2
-    END;
-
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-
-
-CREATE OR REPLACE FUNCTION _rrule.interval_contains(INTERVAL, INTERVAL)
-RETURNS BOOLEAN AS $$
-  -- Any fields that have 0 must have zero in each.
-
-  WITH factors AS (
-    SELECT
-      _rrule.factor(a.months, b.months) AS months,
-      _rrule.factor(a.days, b.days) AS days,
-      _rrule.factor(a.seconds, b.seconds) AS seconds
-    FROM _rrule.explode_interval($2) a, _rrule.explode_interval($1) b
-  )
-  SELECT
-    COALESCE(months <> 0, TRUE)
-      AND
-    COALESCE(days <> 0, TRUE)
-      AND
-    COALESCE(seconds <> 0, TRUE)
-      AND
-    COALESCE(months = days, TRUE)
-      AND
-    COALESCE(months = seconds, TRUE)
-  FROM factors;
-
-$$ LANGUAGE SQL IMMUTABLE STRICT;CREATE OR REPLACE FUNCTION _rrule.parse_line (input TEXT, marker TEXT)
-RETURNS SETOF TEXT AS $$
-  -- Clear spaces at the front of the lines
-  WITH A4 as (SELECT regexp_replace(input, '^\s*',  '', 'ng') "r"),
-  -- Clear all lines except the ones starting with marker
-  A5 as (SELECT regexp_replace(A4."r", '^(?!' || marker || ').*?$',  '', 'ng') "r" FROM A4),
-  -- Replace carriage returns with blank space.
-  A10 as (SELECT regexp_replace(A5."r", E'[\\n\\r]+',  '', 'g') "r" FROM A5),
-  -- Remove marker prefix.
-  A15 as (SELECT regexp_replace(A10."r", marker || ':(.*)$', '\1') "r" FROM A10),
-  -- Trim
-  A17 as (SELECT trim(A15."r") "r" FROM A15),
-  -- Split each key-value pair into a row in a table
-  A20 as (SELECT regexp_split_to_table(A17."r", ';') "r" FROM A17)
-  -- Split each key value pair into an array, e.g. {'FREQ', 'DAILY'}
-  SELECT "r" AS "y"
-  FROM A20
-  WHERE "r" != '';
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-CREATE OR REPLACE FUNCTION _rrule.timestamp_to_day("ts" TIMESTAMP) RETURNS _rrule.DAY AS $$
-  SELECT CAST(CASE to_char("ts", 'DY')
-    WHEN 'MON' THEN 'MO'
-    WHEN 'TUE' THEN 'TU'
-    WHEN 'WED' THEN 'WE'
-    WHEN 'THU' THEN 'TH'
-    WHEN 'FRI' THEN 'FR'
-    WHEN 'SAT' THEN 'SA'
-    WHEN 'SUN' THEN 'SU'
-  END as _rrule.DAY);
-$$ LANGUAGE SQL IMMUTABLE;
-
-CREATE CAST (TIMESTAMP AS _rrule.DAY)
-  WITH FUNCTION _rrule.timestamp_to_day(TIMESTAMP)
-  AS IMPLICIT;CREATE OR REPLACE FUNCTION _rrule.enum_index_of(anyenum)
-RETURNS INTEGER AS $$
-    SELECT row_number FROM (
-        SELECT (row_number() OVER ())::INTEGER, "value"
-        FROM unnest(enum_range($1)) "value"
-    ) x
-    WHERE "value" = $1;
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-COMMENT ON FUNCTION _rrule.enum_index_of(anyenum) IS 'Given an ENUM value, return it''s index.';
-CREATE OR REPLACE FUNCTION _rrule.integer_array (TEXT)
-RETURNS integer[] AS $$
-  SELECT ('{' || $1 || '}')::integer[];
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-COMMENT ON FUNCTION _rrule.integer_array (text) IS 'Coerce a text string into an array of integers';
-
-
-
-CREATE OR REPLACE FUNCTION _rrule.day_array (TEXT)
-RETURNS _rrule.DAY[] AS $$
-  SELECT ('{' || $1 || '}')::_rrule.DAY[];
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-COMMENT ON FUNCTION _rrule.day_array (text) IS 'Coerce a text string into an array of "rrule"."day"';
-
-
-
-CREATE OR REPLACE FUNCTION _rrule.array_join(ANYARRAY, "delimiter" TEXT)
-RETURNS TEXT AS $$
-  SELECT string_agg(x::text, "delimiter")
-  FROM unnest($1) x;
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION _rrule.explode(_rrule.RRULE)
-RETURNS SETOF _rrule.RRULE AS 'SELECT $1' LANGUAGE SQL IMMUTABLE STRICT;
-COMMENT ON FUNCTION _rrule.explode (_rrule.RRULE) IS 'Helper function to allow SELECT * FROM explode(rrule)';
-CREATE OR REPLACE FUNCTION _rrule.compare_equal(_rrule.RRULE, _rrule.RRULE)
-RETURNS BOOLEAN AS $$
-  SELECT count(*) = 1 FROM (
-    SELECT * FROM _rrule.explode($1) UNION SELECT * FROM _rrule.explode($2)
-  ) AS x;
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-
-
-
-CREATE OR REPLACE FUNCTION _rrule.compare_not_equal(_rrule.RRULE, _rrule.RRULE)
-RETURNS BOOLEAN AS $$
-  SELECT count(*) = 2 FROM (
-    SELECT * FROM _rrule.explode($1) UNION SELECT * FROM _rrule.explode($2)
-  ) AS x;
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-CREATE OR REPLACE FUNCTION _rrule.build_interval("interval" INTEGER, "freq" _rrule.FREQ)
-RETURNS INTERVAL AS $$
-  -- Transform ical time interval enums into Postgres intervals, e.g.
-  -- "WEEKLY" becomes "WEEKS".
-  SELECT ("interval" || ' ' || regexp_replace(regexp_replace("freq"::TEXT, 'LY', 'S'), 'IS', 'YS'))::INTERVAL;
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-
-
-CREATE OR REPLACE FUNCTION _rrule.build_interval(_rrule.RRULE)
-RETURNS INTERVAL AS $$
-  SELECT _rrule.build_interval(COALESCE($1."interval", 1), $1."freq");
-$$ LANGUAGE SQL IMMUTABLE STRICT;
--- rrule containment.
--- intervals must be compatible.
--- wkst must match
--- all other fields must have $2's value(s) in $1.
-CREATE OR REPLACE FUNCTION _rrule.contains(_rrule.RRULE, _rrule.RRULE)
-RETURNS BOOLEAN AS $$
-  SELECT _rrule.interval_contains(
-    _rrule.build_interval($1),
-    _rrule.build_interval($2)
-  ) AND COALESCE($1."wkst" = $2."wkst", true);
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION _rrule.contained_by(_rrule.RRULE, _rrule.RRULE)
-RETURNS BOOLEAN AS $$
-  SELECT _rrule.contains($2, $1);
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-CREATE OR REPLACE FUNCTION _rrule.until("rrule" _rrule.RRULE, "dtstart" TIMESTAMP)
-RETURNS TIMESTAMP AS $$
-  SELECT min("until")
-  FROM (
-    SELECT "rrule"."until"
-    UNION
-    SELECT "dtstart" + _rrule.build_interval("rrule"."interval", "rrule"."freq") * COALESCE("rrule"."count", CASE WHEN "rrule"."until" IS NOT NULL THEN NULL ELSE 1 END) AS "until"
-  ) "until" GROUP BY ();
-
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-COMMENT ON FUNCTION _rrule.until(_rrule.RRULE, TIMESTAMP) IS 'The calculated "until"" timestamp for the given rrule+dtstart';
-
--- For example, a YEARLY rule that repeats on first and third month have 2 start values.
-
-CREATE OR REPLACE FUNCTION _rrule.all_starts(
-  "rrule" _rrule.RRULE,
-  "dtstart" TIMESTAMP
-) RETURNS SETOF TIMESTAMP AS $$
+	months integer,
+	days integer,
+	seconds integer
+);
+CREATE TYPE _rrule.freq AS ENUM (
+    'YEARLY',
+    'MONTHLY',
+    'WEEKLY',
+    'DAILY'
+);
+CREATE TABLE _rrule.rrule (
+    freq _rrule.freq NOT NULL,
+    "interval" integer DEFAULT 1 NOT NULL,
+    count integer,
+    until timestamp without time zone,
+    bysecond integer[],
+    byminute integer[],
+    byhour integer[],
+    byday _rrule.day[],
+    bymonthday integer[],
+    byyearday integer[],
+    byweekno integer[],
+    bymonth integer[],
+    bysetpos integer[],
+    wkst _rrule.day,
+    CONSTRAINT freq_yearly_if_byweekno CHECK (((freq = 'YEARLY'::_rrule.freq) OR (byweekno IS NULL))),
+    CONSTRAINT rrule_byhour_check CHECK (((0 <= ALL (byhour)) AND (24 > ALL (byhour)))),
+    CONSTRAINT rrule_byminute_check CHECK (((0 <= ALL (byminute)) AND (60 > ALL (byminute)))),
+    CONSTRAINT rrule_bymonth_check CHECK (((0 < ALL (bymonth)) AND (12 >= ALL (bymonth)))),
+    CONSTRAINT rrule_bymonthday_check CHECK (((31 >= ALL (bymonthday)) AND (0 <> ALL (bymonthday)) AND ('-31'::integer <= ALL (bymonthday)))),
+    CONSTRAINT rrule_bysecond_check CHECK (((0 <= ALL (bysecond)) AND (60 > ALL (bysecond)))),
+    CONSTRAINT rrule_bysetpos_check CHECK (((366 >= ALL (bysetpos)) AND (0 <> ALL (bysetpos)) AND ('-366'::integer <= ALL (bysetpos)))),
+    CONSTRAINT rrule_byweekno_check CHECK (((53 >= ALL (byweekno)) AND (0 <> ALL (byweekno)) AND ('-53'::integer <= ALL (byweekno)))),
+    CONSTRAINT rrule_byyearday_check CHECK (((366 >= ALL (byyearday)) AND (0 <> ALL (byyearday)) AND ('-366'::integer <= ALL (byyearday)))),
+    CONSTRAINT rrule_interval_check CHECK ((0 < "interval"))
+);
+CREATE TABLE _rrule.rruleset (
+    dtstart timestamp without time zone NOT NULL,
+    dtend timestamp without time zone,
+    rrule _rrule.rrule,
+    exrule _rrule.rrule,
+    rdate timestamp without time zone[],
+    exdate timestamp without time zone[]
+);
+CREATE FUNCTION _rrule.after(rruleset_array _rrule.rruleset[], "when" timestamp without time zone) RETURNS SETOF timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT *
+  FROM _rrule.occurrences("rruleset_array", tsrange("when", NULL));
+$$;
+CREATE FUNCTION _rrule.after(rruleset _rrule.rruleset, "when" timestamp without time zone) RETURNS SETOF timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT *
+  FROM _rrule.occurrences("rruleset", tsrange("when", NULL));
+$$;
+CREATE FUNCTION _rrule.after(rrule _rrule.rrule, dtstart timestamp without time zone, "when" timestamp without time zone) RETURNS SETOF timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT *
+  FROM _rrule.occurrences("rrule", "dtstart", tsrange("when", NULL));
+$$;
+CREATE FUNCTION _rrule.after(rrule text, dtstart timestamp without time zone, "when" timestamp without time zone) RETURNS SETOF timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT _rrule.after(_rrule.rrule("rrule"), "dtstart", "when");
+$$;
+CREATE FUNCTION _rrule.all_starts(rrule _rrule.rrule, dtstart timestamp without time zone) RETURNS SETOF timestamp without time zone
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $$
 DECLARE
   months int[];
   hour int := EXTRACT(HOUR FROM "dtstart")::integer;
@@ -329,52 +176,474 @@ BEGIN
     "rrule"."bymonthday" IS NULL OR EXTRACT(DAY FROM "ts") = ANY("rrule"."bymonthday")
   )
   ORDER BY "ts";
-
 END;
-$$ LANGUAGE plpgsql STRICT IMMUTABLE;
-CREATE OR REPLACE FUNCTION _rrule.validate_rrule (result _rrule.RRULE)
-RETURNS void AS $$
+$$;
+CREATE FUNCTION _rrule.array_join(anyarray, delimiter text) RETURNS text
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  SELECT string_agg(x::text, "delimiter")
+  FROM unnest($1) x;
+$_$;
+CREATE FUNCTION _rrule.before(rruleset_array _rrule.rruleset[], "when" timestamp without time zone) RETURNS SETOF timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT *
+  FROM _rrule.occurrences("rruleset_array", tsrange(NULL, "when", '[]'));
+$$;
+CREATE FUNCTION _rrule.before(rruleset _rrule.rruleset, "when" timestamp without time zone) RETURNS SETOF timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT *
+  FROM _rrule.occurrences("rruleset", tsrange(NULL, "when", '[]'));
+$$;
+CREATE FUNCTION _rrule.before(rrule _rrule.rrule, dtstart timestamp without time zone, "when" timestamp without time zone) RETURNS SETOF timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT *
+  FROM _rrule.occurrences("rrule", "dtstart", tsrange(NULL, "when", '[]'));
+$$;
+CREATE FUNCTION _rrule.before(rrule text, dtstart timestamp without time zone, "when" timestamp without time zone) RETURNS SETOF timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT _rrule.before(_rrule.rrule("rrule"), "dtstart", "when");
+$$;
+CREATE FUNCTION _rrule.build_interval(_rrule.rrule) RETURNS interval
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  SELECT _rrule.build_interval(COALESCE($1."interval", 1), $1."freq");
+$_$;
+CREATE FUNCTION _rrule.build_interval("interval" integer, freq _rrule.freq) RETURNS interval
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  -- Transform ical time interval enums into Postgres intervals, e.g.
+  -- "WEEKLY" becomes "WEEKS".
+  SELECT ("interval" || ' ' || regexp_replace(regexp_replace("freq"::TEXT, 'LY', 'S'), 'IS', 'YS'))::INTERVAL;
+$$;
+CREATE FUNCTION _rrule.compare_equal(_rrule.rrule, _rrule.rrule) RETURNS boolean
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  SELECT count(*) = 1 FROM (
+    SELECT * FROM _rrule.explode($1) UNION SELECT * FROM _rrule.explode($2)
+  ) AS x;
+$_$;
+CREATE FUNCTION _rrule.compare_not_equal(_rrule.rrule, _rrule.rrule) RETURNS boolean
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  SELECT count(*) = 2 FROM (
+    SELECT * FROM _rrule.explode($1) UNION SELECT * FROM _rrule.explode($2)
+  ) AS x;
+$_$;
+CREATE FUNCTION _rrule.contained_by(_rrule.rrule, _rrule.rrule) RETURNS boolean
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  SELECT _rrule.contains($2, $1);
+$_$;
+CREATE FUNCTION _rrule.contains(_rrule.rrule, _rrule.rrule) RETURNS boolean
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  SELECT _rrule.interval_contains(
+    _rrule.build_interval($1),
+    _rrule.build_interval($2)
+  ) AND COALESCE($1."wkst" = $2."wkst", true);
+$_$;
+CREATE FUNCTION _rrule.contains_timestamp(_rrule.rruleset, timestamp without time zone) RETURNS boolean
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $_$
+DECLARE
+  inSet boolean;
 BEGIN
-  -- FREQ is required
-  IF result."freq" IS NULL THEN
-    RAISE EXCEPTION 'FREQ cannot be null';
-  END IF;
-
-  -- FREQ=YEARLY required if BYWEEKNO is provided
-  IF result."byweekno" IS NOT NULL AND result."freq" != 'YEARLY' THEN
-    RAISE EXCEPTION 'FREQ must be YEARLY if BYWEEKNO is provided.';
-  END IF;
-
-  -- Limits on FREQ if byyearday is selected
-  IF (result."freq" <> 'YEARLY' AND result."byyearday" IS NOT NULL) THEN
-    RAISE EXCEPTION 'BYYEARDAY is only valid when FREQ is YEARLY.';
-  END IF;
-
-  IF (result."freq" = 'WEEKLY' AND result."bymonthday" IS NOT NULL) THEN
-    RAISE EXCEPTION 'BYMONTHDAY is not valid when FREQ is WEEKLY.';
-  END IF;
-
-  -- BY[something-else] is required if BYSETPOS is set.
-  IF (result."bysetpos" IS NOT NULL AND result."bymonth" IS NULL AND result."byweekno" IS NULL AND result."byyearday" IS NULL AND result."bymonthday" IS NULL AND result."byday" IS NULL AND result."byhour" IS NULL AND result."byminute" IS NULL AND result."bysecond" IS NULL) THEN
-    RAISE EXCEPTION 'BYSETPOS requires at least one other BY*';
-  END IF;
-
-  IF result."freq" = 'DAILY' AND result."byday" IS NOT NULL THEN
-    RAISE EXCEPTION 'BYDAY is not valid when FREQ is DAILY.';
-  END IF;
-
-  IF result."until" IS NOT NULL AND result."count" IS NOT NULL THEN
-    RAISE EXCEPTION 'UNTIL and COUNT MUST NOT occur in the same recurrence.';
-  END IF;
-
-  IF result."interval" IS NOT NULL THEN
-    IF (NOT result."interval" > 0) THEN
-      RAISE EXCEPTION 'INTERVAL must be a non-zero integer.';
+  -- TODO: Not sure what how this is finding a timestamp that is contained
+  -- by the rruleset.
+  SELECT COUNT(*) > 0
+  INTO inSet
+  FROM _rrule.after($1, $2 - INTERVAL '1 month') "ts"
+  WHERE "ts"::date = $2::date;
+  RETURN inSet;
+END;
+$_$;
+CREATE FUNCTION _rrule.day_array(text) RETURNS _rrule.day[]
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  SELECT ('{' || $1 || '}')::_rrule.DAY[];
+$_$;
+COMMENT ON FUNCTION _rrule.day_array(text) IS 'Coerce a text string into an array of "rrule"."day"';
+CREATE FUNCTION _rrule.enum_index_of(anyenum) RETURNS integer
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+    SELECT row_number FROM (
+        SELECT (row_number() OVER ())::INTEGER, "value"
+        FROM unnest(enum_range($1)) "value"
+    ) x
+    WHERE "value" = $1;
+$_$;
+COMMENT ON FUNCTION _rrule.enum_index_of(anyenum) IS 'Given an ENUM value, return it''s index.';
+CREATE FUNCTION _rrule.explode(_rrule.rrule) RETURNS SETOF _rrule.rrule
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$SELECT $1$_$;
+COMMENT ON FUNCTION _rrule.explode(_rrule.rrule) IS 'Helper function to allow SELECT * FROM explode(rrule)';
+CREATE FUNCTION _rrule.explode_interval(interval) RETURNS _rrule.exploded_interval
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  SELECT
+    (
+      EXTRACT(YEAR FROM $1) * 12 + EXTRACT(MONTH FROM $1),
+      EXTRACT(DAY FROM $1),
+      EXTRACT(HOUR FROM $1) * 3600 + EXTRACT(MINUTE FROM $1) * 60 + EXTRACT(SECOND FROM $1)
+    )::_rrule.EXPLODED_INTERVAL;
+$_$;
+CREATE FUNCTION _rrule.factor(integer, integer) RETURNS integer
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  SELECT
+    CASE
+      WHEN ($1 = 0 AND $2 = 0) THEN NULL
+      WHEN ($1 = 0 OR $2 = 0) THEN 0
+      WHEN ($1 % $2 <> 0) THEN 0
+      ELSE $1 / $2
+    END;
+$_$;
+CREATE FUNCTION _rrule.first(rruleset_array _rrule.rruleset[]) RETURNS timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT occurrence
+  FROM _rrule.occurrences("rruleset_array", '(,)'::TSRANGE) occurrence
+  ORDER BY occurrence ASC LIMIT 1;
+$$;
+CREATE FUNCTION _rrule.first(rruleset _rrule.rruleset) RETURNS timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT occurrence
+  FROM _rrule.occurrences("rruleset") occurrence
+  ORDER BY occurrence ASC LIMIT 1;
+$$;
+CREATE FUNCTION _rrule.first(rrule _rrule.rrule, dtstart timestamp without time zone) RETURNS timestamp without time zone
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $$
+BEGIN
+  RETURN (SELECT "ts"
+  FROM _rrule.all_starts("rrule", "dtstart") "ts"
+  WHERE "ts" >= "dtstart"
+  ORDER BY "ts" ASC
+  LIMIT 1);
+END;
+$$;
+CREATE FUNCTION _rrule.first(rrule text, dtstart timestamp without time zone) RETURNS timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT _rrule.first(_rrule.rrule("rrule"), "dtstart");
+$$;
+CREATE FUNCTION _rrule.integer_array(text) RETURNS integer[]
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  SELECT ('{' || $1 || '}')::integer[];
+$_$;
+COMMENT ON FUNCTION _rrule.integer_array(text) IS 'Coerce a text string into an array of integers';
+CREATE FUNCTION _rrule.interval_contains(interval, interval) RETURNS boolean
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  -- Any fields that have 0 must have zero in each.
+  WITH factors AS (
+    SELECT
+      _rrule.factor(a.months, b.months) AS months,
+      _rrule.factor(a.days, b.days) AS days,
+      _rrule.factor(a.seconds, b.seconds) AS seconds
+    FROM _rrule.explode_interval($2) a, _rrule.explode_interval($1) b
+  )
+  SELECT
+    COALESCE(months <> 0, TRUE)
+      AND
+    COALESCE(days <> 0, TRUE)
+      AND
+    COALESCE(seconds <> 0, TRUE)
+      AND
+    COALESCE(months = days, TRUE)
+      AND
+    COALESCE(months = seconds, TRUE)
+  FROM factors;
+$_$;
+CREATE FUNCTION _rrule.is_finite(rruleset_array _rrule.rruleset[]) RETURNS boolean
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $$
+DECLARE
+  item _rrule.RRULESET;
+BEGIN
+  FOREACH item IN ARRAY "rruleset_array" LOOP
+    IF (SELECT _rrule.is_finite(item)) THEN
+      RETURN true;
     END IF;
+  END LOOP;
+  RETURN false;
+END;
+$$;
+CREATE FUNCTION _rrule.is_finite(rrule _rrule.rrule) RETURNS boolean
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT "rrule"."count" IS NOT NULL OR "rrule"."until" IS NOT NULL;
+$$;
+CREATE FUNCTION _rrule.is_finite(rruleset _rrule.rruleset) RETURNS boolean
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT _rrule.is_finite("rruleset"."rrule")
+$$;
+CREATE FUNCTION _rrule.is_finite(rrule text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT _rrule.is_finite(_rrule.rrule("rrule"));
+$$;
+CREATE FUNCTION _rrule.jsonb_to_rrule(input jsonb) RETURNS _rrule.rrule
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $$
+DECLARE
+  result _rrule.RRULE;
+BEGIN
+  IF (SELECT count(*) = 0 FROM jsonb_object_keys("input") WHERE "input"::TEXT <> 'null') THEN
+    RETURN NULL;
+  END IF;
+  SELECT
+    "freq",
+    -- Default value for INTERVAL
+    COALESCE("interval", 1) AS "interval",
+    "count",
+    "until",
+    "bysecond",
+    "byminute",
+    "byhour",
+    "byday",
+    "bymonthday",
+    "byyearday",
+    "byweekno",
+    "bymonth",
+    "bysetpos",
+    -- DEFAULT value for wkst
+    COALESCE("wkst", 'MO') AS "wkst"
+  INTO result
+  FROM jsonb_to_record("input") as x(
+    "freq" _rrule.FREQ,
+    "interval" integer,
+    "count" INTEGER,
+    "until" text,
+    "bysecond" integer[],
+    "byminute" integer[],
+    "byhour" integer[],
+    "byday" text[],
+    "bymonthday" integer[],
+    "byyearday" integer[],
+    "byweekno" integer[],
+    "bymonth" integer[],
+    "bysetpos" integer[],
+    "wkst" _rrule.DAY
+  );
+  PERFORM _rrule.validate_rrule(result);
+  RETURN result;
+END;
+$$;
+CREATE FUNCTION _rrule.jsonb_to_rruleset(input jsonb) RETURNS _rrule.rruleset
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $$
+DECLARE
+  result _rrule.RRULESET;
+BEGIN
+  SELECT
+    "dtstart"::TIMESTAMP,
+    "dtend"::TIMESTAMP,
+    _rrule.jsonb_to_rrule("rrule") "rrule",
+    _rrule.jsonb_to_rrule("exrule") "exrule",
+    "rdate"::TIMESTAMP[],
+    "exdate"::TIMESTAMP[]
+  INTO result
+  FROM jsonb_to_record("input") as x(
+    "dtstart" text,
+    "dtend" text,
+    "rrule" jsonb,
+    "exrule" jsonb,
+    "rdate" text[],
+    "exdate" text[]
+  );
+  -- TODO: validate rruleset
+  RETURN result;
+END;
+$$;
+CREATE FUNCTION _rrule.jsonb_to_rruleset_array(input jsonb) RETURNS _rrule.rruleset[]
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $$
+DECLARE
+  item jsonb;
+  out _rrule.RRULESET[] := '{}'::_rrule.RRULESET[];
+BEGIN
+  FOR item IN SELECT * FROM jsonb_array_elements("input")
+  LOOP
+    out := (SELECT out || _rrule.jsonb_to_rruleset(item));
+  END LOOP;
+  RETURN out;
+END;
+$$;
+CREATE FUNCTION _rrule.last(rruleset_array _rrule.rruleset[]) RETURNS SETOF timestamp without time zone
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $$
+BEGIN
+  IF (SELECT _rrule.is_finite("rruleset_array")) THEN
+    RETURN QUERY SELECT occurrence
+    FROM _rrule.occurrences("rruleset_array", '(,)'::TSRANGE) occurrence
+    ORDER BY occurrence DESC LIMIT 1;
+  ELSE
+    RETURN QUERY SELECT NULL::TIMESTAMP;
   END IF;
 END;
-$$ LANGUAGE plpgsql IMMUTABLE STRICT;CREATE OR REPLACE FUNCTION _rrule.rrule (TEXT)
-RETURNS _rrule.RRULE AS $$
+$$;
+CREATE FUNCTION _rrule.last(rruleset _rrule.rruleset) RETURNS timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT occurrence
+  FROM _rrule.occurrences("rruleset") occurrence
+  ORDER BY occurrence DESC LIMIT 1;
+$$;
+CREATE FUNCTION _rrule.last(rrule _rrule.rrule, dtstart timestamp without time zone) RETURNS timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT occurrence
+  FROM _rrule.occurrences("rrule", "dtstart") occurrence
+  ORDER BY occurrence DESC LIMIT 1;
+$$;
+CREATE FUNCTION _rrule.last(rrule text, dtstart timestamp without time zone) RETURNS timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT _rrule.last(_rrule.rrule("rrule"), "dtstart");
+$$;
+CREATE FUNCTION _rrule.occurrences(rruleset _rrule.rruleset) RETURNS SETOF timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT _rrule.occurrences("rruleset", '(,)'::TSRANGE);
+$$;
+CREATE FUNCTION _rrule.occurrences(rruleset_array _rrule.rruleset[], tsrange tsrange) RETURNS SETOF timestamp without time zone
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $_$
+DECLARE
+  i int;
+  lim int;
+  q text := '';
+BEGIN
+  lim := array_length("rruleset_array", 1);
+  IF lim IS NULL THEN
+    q := 'VALUES (NULL::TIMESTAMP) LIMIT 0;';
+  ELSE
+    FOR i IN 1..lim
+    LOOP
+      q := q || $q$SELECT _rrule.occurrences('$q$ || "rruleset_array"[i] ||$q$'::_rrule.RRULESET, '$q$ || "tsrange" ||$q$'::TSRANGE)$q$;
+      IF i != lim THEN
+        q := q || ' UNION ';
+      END IF;
+    END LOOP;
+    q := q || ' ORDER BY occurrences ASC';
+  END IF;
+  RETURN QUERY EXECUTE q;
+END;
+$_$;
+CREATE FUNCTION _rrule.occurrences(rrule _rrule.rrule, dtstart timestamp without time zone) RETURNS SETOF timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  WITH "starts" AS (
+    SELECT "start"
+    FROM _rrule.all_starts($1, $2) "start"
+  ),
+  "params" AS (
+    SELECT
+      "until",
+      "interval"
+    FROM _rrule.until($1, $2) "until"
+    FULL OUTER JOIN _rrule.build_interval($1) "interval" ON (true)
+  ),
+  "generated" AS (
+    SELECT generate_series("start", "until", "interval") "occurrence"
+    FROM "params"
+    FULL OUTER JOIN "starts" ON (true)
+  ),
+  "ordered" AS (
+    SELECT DISTINCT "occurrence"
+    FROM "generated"
+    WHERE "occurrence" >= "dtstart"
+    ORDER BY "occurrence"
+  ),
+  "tagged" AS (
+    SELECT
+      row_number() OVER (),
+      "occurrence"
+    FROM "ordered"
+  )
+  SELECT "occurrence"
+  FROM "tagged"
+  WHERE "row_number" <= "rrule"."count"
+  OR "rrule"."count" IS NULL
+  ORDER BY "occurrence";
+$_$;
+CREATE FUNCTION _rrule.occurrences(rruleset _rrule.rruleset, tsrange tsrange) RETURNS SETOF timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  WITH "rrules" AS (
+    SELECT
+      "rruleset"."dtstart",
+      "rruleset"."dtend",
+      "rruleset"."rrule"
+  ),
+  "rdates" AS (
+    SELECT _rrule.occurrences("rrule", "dtstart", "tsrange") AS "occurrence"
+    FROM "rrules"
+    UNION
+    SELECT unnest("rruleset"."rdate") AS "occurrence"
+  ),
+  "exrules" AS (
+    SELECT
+      "rruleset"."dtstart",
+      "rruleset"."dtend",
+      "rruleset"."exrule"
+  ),
+  "exdates" AS (
+    SELECT _rrule.occurrences("exrule", "dtstart", "tsrange") AS "occurrence"
+    FROM "exrules"
+    UNION
+    SELECT unnest("rruleset"."exdate") AS "occurrence"
+  )
+  SELECT "occurrence" FROM "rdates"
+  EXCEPT
+  SELECT "occurrence" FROM "exdates"
+  ORDER BY "occurrence";
+$$;
+CREATE FUNCTION _rrule.occurrences(rrule _rrule.rrule, dtstart timestamp without time zone, "between" tsrange) RETURNS SETOF timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT "occurrence"
+  FROM _rrule.occurrences("rrule", "dtstart") "occurrence"
+  WHERE "occurrence" <@ "between";
+$$;
+CREATE FUNCTION _rrule.occurrences(rrule text, dtstart timestamp without time zone, "between" tsrange) RETURNS SETOF timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT "occurrence"
+  FROM _rrule.occurrences(_rrule.rrule("rrule"), "dtstart") "occurrence"
+  WHERE "occurrence" <@ "between";
+$$;
+CREATE FUNCTION _rrule.parse_line(input text, marker text) RETURNS SETOF text
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  -- Clear spaces at the front of the lines
+  WITH A4 as (SELECT regexp_replace(input, '^\s*',  '', 'ng') "r"),
+  -- Clear all lines except the ones starting with marker
+  A5 as (SELECT regexp_replace(A4."r", '^(?!' || marker || ').*?$',  '', 'ng') "r" FROM A4),
+  -- Replace carriage returns with blank space.
+  A10 as (SELECT regexp_replace(A5."r", E'[\\n\\r]+',  '', 'g') "r" FROM A5),
+  -- Remove marker prefix.
+  A15 as (SELECT regexp_replace(A10."r", marker || ':(.*)$', '\1') "r" FROM A10),
+  -- Trim
+  A17 as (SELECT trim(A15."r") "r" FROM A15),
+  -- Split each key-value pair into a row in a table
+  A20 as (SELECT regexp_split_to_table(A17."r", ';') "r" FROM A17)
+  -- Split each key value pair into an array, e.g. {'FREQ', 'DAILY'}
+  SELECT "r" AS "y"
+  FROM A20
+  WHERE "r" != '';
+$_$;
+CREATE FUNCTION _rrule.rrule(text) RETURNS _rrule.rrule
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $_$
 DECLARE
   result _rrule.RRULE;
 BEGIN
@@ -420,439 +689,13 @@ BEGIN
     COALESCE("wkst", 'MO') AS "wkst"
   INTO result
   FROM candidate;
-
   PERFORM _rrule.validate_rrule(result);
-
   RETURN result;
 END;
-$$ LANGUAGE plpgsql IMMUTABLE STRICT;
-
-
-CREATE OR REPLACE FUNCTION _rrule.text(_rrule.RRULE)
-RETURNS TEXT AS $$
-  SELECT regexp_replace(
-    'RRULE:'
-    || COALESCE('FREQ=' || $1."freq" || ';', '')
-    || CASE WHEN $1."interval" = 1 THEN '' ELSE COALESCE('INTERVAL=' || $1."interval" || ';', '') END
-    || COALESCE('COUNT=' || $1."count" || ';', '')
-    || COALESCE('UNTIL=' || $1."until" || ';', '')
-    || COALESCE('BYSECOND=' || _rrule.array_join($1."bysecond", ',') || ';', '')
-    || COALESCE('BYMINUTE=' || _rrule.array_join($1."byminute", ',') || ';', '')
-    || COALESCE('BYHOUR=' || _rrule.array_join($1."byhour", ',') || ';', '')
-    || COALESCE('BYDAY=' || _rrule.array_join($1."byday", ',') || ';', '')
-    || COALESCE('BYMONTHDAY=' || _rrule.array_join($1."bymonthday", ',') || ';', '')
-    || COALESCE('BYYEARDAY=' || _rrule.array_join($1."byyearday", ',') || ';', '')
-    || COALESCE('BYWEEKNO=' || _rrule.array_join($1."byweekno", ',') || ';', '')
-    || COALESCE('BYMONTH=' || _rrule.array_join($1."bymonth", ',') || ';', '')
-    || COALESCE('BYSETPOS=' || _rrule.array_join($1."bysetpos", ',') || ';', '')
-    || CASE WHEN $1."wkst" = 'MO' THEN '' ELSE COALESCE('WKST=' || $1."wkst" || ';', '') END
-  , ';$', '');
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-CREATE OR REPLACE FUNCTION _rrule.rruleset (TEXT)
-RETURNS _rrule.RRULESET AS $$
-  WITH "dtstart-line" AS (SELECT _rrule.parse_line($1::text, 'DTSTART') as "x"),
-  "dtend-line" AS (SELECT _rrule.parse_line($1::text, 'DTEND') as "x"),
-  "exrule-line" AS (SELECT _rrule.parse_line($1::text, 'EXRULE') as "x")
-  SELECT
-    (SELECT "x"::timestamp FROM "dtstart-line" LIMIT 1) AS "dtstart",
-    (SELECT "x"::timestamp FROM "dtend-line" LIMIT 1) AS "dtend",
-    (SELECT _rrule.rrule($1::text) "rrule") as "rrule",
-    (SELECT _rrule.rrule("x"::text) "rrule" FROM "exrule-line") as "exrule",
-    NULL::TIMESTAMP[] "rdate",
-    NULL::TIMESTAMP[] "exdate";
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-
--- All of the function(rrule, ...) forms also accept a text argument, which will
--- be parsed using the RFC-compliant parser.
-
-CREATE OR REPLACE FUNCTION _rrule.is_finite("rrule" _rrule.RRULE)
-RETURNS BOOLEAN AS $$
-  SELECT "rrule"."count" IS NOT NULL OR "rrule"."until" IS NOT NULL;
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.is_finite("rrule" TEXT)
-RETURNS BOOLEAN AS $$
-  SELECT _rrule.is_finite(_rrule.rrule("rrule"));
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.is_finite("rruleset" _rrule.RRULESET)
-RETURNS BOOLEAN AS $$
-  SELECT _rrule.is_finite("rruleset"."rrule")
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.is_finite("rruleset_array" _rrule.RRULESET[])
-RETURNS BOOLEAN AS $$
-DECLARE
-  item _rrule.RRULESET;
-BEGIN
-  FOREACH item IN ARRAY "rruleset_array" LOOP
-    IF (SELECT _rrule.is_finite(item)) THEN
-      RETURN true;
-    END IF;
-  END LOOP;
-  RETURN false;
-END;
-$$ LANGUAGE plpgsql STRICT IMMUTABLE;
-
-
-
-CREATE OR REPLACE FUNCTION _rrule.occurrences(
-  "rrule" _rrule.RRULE,
-  "dtstart" TIMESTAMP
-)
-RETURNS SETOF TIMESTAMP AS $$
-  WITH "starts" AS (
-    SELECT "start"
-    FROM _rrule.all_starts($1, $2) "start"
-  ),
-  "params" AS (
-    SELECT
-      "until",
-      "interval"
-    FROM _rrule.until($1, $2) "until"
-    FULL OUTER JOIN _rrule.build_interval($1) "interval" ON (true)
-  ),
-  "generated" AS (
-    SELECT generate_series("start", "until", "interval") "occurrence"
-    FROM "params"
-    FULL OUTER JOIN "starts" ON (true)
-  ),
-  "ordered" AS (
-    SELECT DISTINCT "occurrence"
-    FROM "generated"
-    WHERE "occurrence" >= "dtstart"
-    ORDER BY "occurrence"
-  ),
-  "tagged" AS (
-    SELECT
-      row_number() OVER (),
-      "occurrence"
-    FROM "ordered"
-  )
-  SELECT "occurrence"
-  FROM "tagged"
-  WHERE "row_number" <= "rrule"."count"
-  OR "rrule"."count" IS NULL
-  ORDER BY "occurrence";
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.occurrences("rrule" _rrule.RRULE, "dtstart" TIMESTAMP, "between" TSRANGE)
-RETURNS SETOF TIMESTAMP AS $$
-  SELECT "occurrence"
-  FROM _rrule.occurrences("rrule", "dtstart") "occurrence"
-  WHERE "occurrence" <@ "between";
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.occurrences("rrule" TEXT, "dtstart" TIMESTAMP, "between" TSRANGE)
-RETURNS SETOF TIMESTAMP AS $$
-  SELECT "occurrence"
-  FROM _rrule.occurrences(_rrule.rrule("rrule"), "dtstart") "occurrence"
-  WHERE "occurrence" <@ "between";
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.occurrences(
-  "rruleset" _rrule.RRULESET,
-  "tsrange" TSRANGE
-)
-RETURNS SETOF TIMESTAMP AS $$
-  WITH "rrules" AS (
-    SELECT
-      "rruleset"."dtstart",
-      "rruleset"."dtend",
-      "rruleset"."rrule"
-  ),
-  "rdates" AS (
-    SELECT _rrule.occurrences("rrule", "dtstart", "tsrange") AS "occurrence"
-    FROM "rrules"
-    UNION
-    SELECT unnest("rruleset"."rdate") AS "occurrence"
-  ),
-  "exrules" AS (
-    SELECT
-      "rruleset"."dtstart",
-      "rruleset"."dtend",
-      "rruleset"."exrule"
-  ),
-  "exdates" AS (
-    SELECT _rrule.occurrences("exrule", "dtstart", "tsrange") AS "occurrence"
-    FROM "exrules"
-    UNION
-    SELECT unnest("rruleset"."exdate") AS "occurrence"
-  )
-  SELECT "occurrence" FROM "rdates"
-  EXCEPT
-  SELECT "occurrence" FROM "exdates"
-  ORDER BY "occurrence";
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.occurrences("rruleset" _rrule.RRULESET)
-RETURNS SETOF TIMESTAMP AS $$
-  SELECT _rrule.occurrences("rruleset", '(,)'::TSRANGE);
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.occurrences(
-  "rruleset_array" _rrule.RRULESET[],
-  "tsrange" TSRANGE
-  -- TODO: add a default limit and then use that limit from `first` and `last`
-)
-RETURNS SETOF TIMESTAMP AS $$
-DECLARE
-  i int;
-  lim int;
-  q text := '';
-BEGIN
-  lim := array_length("rruleset_array", 1);
-
-  IF lim IS NULL THEN
-    q := 'VALUES (NULL::TIMESTAMP) LIMIT 0;';
-  ELSE
-    FOR i IN 1..lim
-    LOOP
-      q := q || $q$SELECT _rrule.occurrences('$q$ || "rruleset_array"[i] ||$q$'::_rrule.RRULESET, '$q$ || "tsrange" ||$q$'::TSRANGE)$q$;
-      IF i != lim THEN
-        q := q || ' UNION ';
-      END IF;
-    END LOOP;
-    q := q || ' ORDER BY occurrences ASC';
-  END IF;
-
-  RETURN QUERY EXECUTE q;
-END;
-$$ LANGUAGE plpgsql STRICT IMMUTABLE;CREATE OR REPLACE FUNCTION _rrule.first("rrule" _rrule.RRULE, "dtstart" TIMESTAMP)
-RETURNS TIMESTAMP AS $$
-BEGIN
-  RETURN (SELECT "ts"
-  FROM _rrule.all_starts("rrule", "dtstart") "ts"
-  WHERE "ts" >= "dtstart"
-  ORDER BY "ts" ASC
-  LIMIT 1);
-END;
-$$ LANGUAGE plpgsql STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.first("rrule" TEXT, "dtstart" TIMESTAMP)
-RETURNS TIMESTAMP AS $$
-  SELECT _rrule.first(_rrule.rrule("rrule"), "dtstart");
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.first("rruleset" _rrule.RRULESET)
-RETURNS TIMESTAMP AS $$
-  SELECT occurrence
-  FROM _rrule.occurrences("rruleset") occurrence
-  ORDER BY occurrence ASC LIMIT 1;
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.first("rruleset_array" _rrule.RRULESET[])
-RETURNS TIMESTAMP AS $$
-  SELECT occurrence
-  FROM _rrule.occurrences("rruleset_array", '(,)'::TSRANGE) occurrence
-  ORDER BY occurrence ASC LIMIT 1;
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-
-CREATE OR REPLACE FUNCTION _rrule.last("rrule" _rrule.RRULE, "dtstart" TIMESTAMP)
-RETURNS TIMESTAMP AS $$
-  SELECT occurrence
-  FROM _rrule.occurrences("rrule", "dtstart") occurrence
-  ORDER BY occurrence DESC LIMIT 1;
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.last("rrule" TEXT, "dtstart" TIMESTAMP)
-RETURNS TIMESTAMP AS $$
-  SELECT _rrule.last(_rrule.rrule("rrule"), "dtstart");
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.last("rruleset" _rrule.RRULESET)
-RETURNS TIMESTAMP AS $$
-  SELECT occurrence
-  FROM _rrule.occurrences("rruleset") occurrence
-  ORDER BY occurrence DESC LIMIT 1;
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
--- TODO: Ensure to check whether the range is finite. If not, we should return null
--- or something meaningful.
-CREATE OR REPLACE FUNCTION _rrule.last("rruleset_array" _rrule.RRULESET[])
-RETURNS SETOF TIMESTAMP AS $$
-BEGIN
-  IF (SELECT _rrule.is_finite("rruleset_array")) THEN
-    RETURN QUERY SELECT occurrence
-    FROM _rrule.occurrences("rruleset_array", '(,)'::TSRANGE) occurrence
-    ORDER BY occurrence DESC LIMIT 1;
-  ELSE
-    RETURN QUERY SELECT NULL::TIMESTAMP;
-  END IF;
-END;
-$$ LANGUAGE plpgsql STRICT IMMUTABLE;
-
-
-CREATE OR REPLACE FUNCTION _rrule.before(
-  "rrule" _rrule.RRULE,
-  "dtstart" TIMESTAMP,
-  "when" TIMESTAMP
-)
-RETURNS SETOF TIMESTAMP AS $$
-  SELECT *
-  FROM _rrule.occurrences("rrule", "dtstart", tsrange(NULL, "when", '[]'));
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.before("rrule" TEXT, "dtstart" TIMESTAMP, "when" TIMESTAMP)
-RETURNS SETOF TIMESTAMP AS $$
-  SELECT _rrule.before(_rrule.rrule("rrule"), "dtstart", "when");
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.before("rruleset" _rrule.RRULESET, "when" TIMESTAMP)
-RETURNS SETOF TIMESTAMP AS $$
-  SELECT *
-  FROM _rrule.occurrences("rruleset", tsrange(NULL, "when", '[]'));
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
--- TODO: test
-CREATE OR REPLACE FUNCTION _rrule.before("rruleset_array" _rrule.RRULESET[], "when" TIMESTAMP)
-RETURNS SETOF TIMESTAMP AS $$
-  SELECT *
-  FROM _rrule.occurrences("rruleset_array", tsrange(NULL, "when", '[]'));
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-
-
-CREATE OR REPLACE FUNCTION _rrule.after(
-  "rrule" _rrule.RRULE,
-  "dtstart" TIMESTAMP,
-  "when" TIMESTAMP
-)
-RETURNS SETOF TIMESTAMP AS $$
-  SELECT *
-  FROM _rrule.occurrences("rrule", "dtstart", tsrange("when", NULL));
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.after(
-  "rrule" TEXT,
-  "dtstart" TIMESTAMP,
-  "when" TIMESTAMP
-)
-RETURNS SETOF TIMESTAMP AS $$
-  SELECT _rrule.after(_rrule.rrule("rrule"), "dtstart", "when");
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.after("rruleset" _rrule.RRULESET, "when" TIMESTAMP)
-RETURNS SETOF TIMESTAMP AS $$
-  SELECT *
-  FROM _rrule.occurrences("rruleset", tsrange("when", NULL));
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
--- TODO: test
-CREATE OR REPLACE FUNCTION _rrule.after("rruleset_array" _rrule.RRULESET[], "when" TIMESTAMP)
-RETURNS SETOF TIMESTAMP AS $$
-  SELECT *
-  FROM _rrule.occurrences("rruleset_array", tsrange("when", NULL));
-$$ LANGUAGE SQL STRICT IMMUTABLE;
-
-CREATE OR REPLACE FUNCTION _rrule.contains_timestamp(_rrule.RRULESET, TIMESTAMP)
-RETURNS BOOLEAN AS $$
-DECLARE
-  inSet boolean;
-BEGIN
-  -- TODO: Not sure what how this is finding a timestamp that is contained
-  -- by the rruleset.
-  SELECT COUNT(*) > 0
-  INTO inSet
-  FROM _rrule.after($1, $2 - INTERVAL '1 month') "ts"
-  WHERE "ts"::date = $2::date;
-
-  RETURN inSet;
-END;
-$$ LANGUAGE plpgsql IMMUTABLE STRICT;
-CREATE OR REPLACE FUNCTION _rrule.jsonb_to_rrule("input" jsonb)
-RETURNS _rrule.RRULE AS $$
-DECLARE
-  result _rrule.RRULE;
-BEGIN
-  IF (SELECT count(*) = 0 FROM jsonb_object_keys("input") WHERE "input"::TEXT <> 'null') THEN
-    RETURN NULL;
-  END IF;
-
-  SELECT
-    "freq",
-    -- Default value for INTERVAL
-    COALESCE("interval", 1) AS "interval",
-    "count",
-    "until",
-    "bysecond",
-    "byminute",
-    "byhour",
-    "byday",
-    "bymonthday",
-    "byyearday",
-    "byweekno",
-    "bymonth",
-    "bysetpos",
-    -- DEFAULT value for wkst
-    COALESCE("wkst", 'MO') AS "wkst"
-  INTO result
-  FROM jsonb_to_record("input") as x(
-    "freq" _rrule.FREQ,
-    "interval" integer,
-    "count" INTEGER,
-    "until" text,
-    "bysecond" integer[],
-    "byminute" integer[],
-    "byhour" integer[],
-    "byday" text[],
-    "bymonthday" integer[],
-    "byyearday" integer[],
-    "byweekno" integer[],
-    "bymonth" integer[],
-    "bysetpos" integer[],
-    "wkst" _rrule.DAY
-  );
-
-  PERFORM _rrule.validate_rrule(result);
-
-  RETURN result;
-END;
-$$ LANGUAGE plpgsql IMMUTABLE STRICT;
-CREATE OR REPLACE FUNCTION _rrule.jsonb_to_rruleset("input" jsonb)
-RETURNS _rrule.RRULESET AS $$
-DECLARE
-  result _rrule.RRULESET;
-BEGIN
-  SELECT
-    "dtstart"::TIMESTAMP,
-    "dtend"::TIMESTAMP,
-    _rrule.jsonb_to_rrule("rrule") "rrule",
-    _rrule.jsonb_to_rrule("exrule") "exrule",
-    "rdate"::TIMESTAMP[],
-    "exdate"::TIMESTAMP[]
-  INTO result
-  FROM jsonb_to_record("input") as x(
-    "dtstart" text,
-    "dtend" text,
-    "rrule" jsonb,
-    "exrule" jsonb,
-    "rdate" text[],
-    "exdate" text[]
-  );
-
-  -- TODO: validate rruleset
-
-  RETURN result;
-END;
-$$ LANGUAGE plpgsql IMMUTABLE STRICT;
-CREATE OR REPLACE FUNCTION _rrule.jsonb_to_rruleset_array("input" jsonb)
-RETURNS _rrule.RRULESET[] AS $$
-DECLARE
-  item jsonb;
-  out _rrule.RRULESET[] := '{}'::_rrule.RRULESET[];
-BEGIN
-  FOR item IN SELECT * FROM jsonb_array_elements("input")
-  LOOP
-    out := (SELECT out || _rrule.jsonb_to_rruleset(item));
-  END LOOP;
-
-  RETURN out;
-END;
-$$ LANGUAGE plpgsql IMMUTABLE STRICT;
-CREATE OR REPLACE FUNCTION _rrule.rrule_to_jsonb("input" _rrule.RRULE)
-RETURNS jsonb AS $$
+$_$;
+CREATE FUNCTION _rrule.rrule_to_jsonb(input _rrule.rrule) RETURNS jsonb
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $$
 BEGIN
   RETURN jsonb_strip_nulls(jsonb_build_object(
     'freq', "input"."freq",
@@ -871,44 +714,24 @@ BEGIN
     'wkst', "input"."wkst"
   ));
 END;
-$$ LANGUAGE plpgsql IMMUTABLE STRICT;
-CREATE OR REPLACE FUNCTION _rrule.rruleset_to_jsonb("input" _rrule.RRULESET)
-RETURNS jsonb AS $$
-DECLARE
-  rrule jsonb;
-  exrule jsonb;
-BEGIN
-  SELECT _rrule.rrule_to_jsonb("input"."rrule")
-  INTO rrule;
-
-  SELECT _rrule.rrule_to_jsonb("input"."exrule")
-  INTO exrule;
-
-  RETURN jsonb_strip_nulls(jsonb_build_object(
-    'dtstart', "input"."dtstart",
-    'dtend', "input"."dtend",
-    'rrule', rrule,
-    'exrule', exrule,
-    'rdate', "input"."rdate",
-    'exdate', "input"."exdate"
-  ));
-END;
-$$ LANGUAGE plpgsql IMMUTABLE STRICT;
-CREATE OR REPLACE FUNCTION _rrule.rruleset_array_to_jsonb("input" _rrule.RRULESET[])
-RETURNS jsonb AS $$
-DECLARE
-  item _rrule.RRULESET;
-  out jsonb := '[]'::jsonb;
-BEGIN
-  FOREACH item IN ARRAY "input" LOOP
-    out := (SELECT out || _rrule.rruleset_to_jsonb(item));
-  END LOOP;
-
-  RETURN out;
-END;
-$$ LANGUAGE plpgsql IMMUTABLE STRICT;
-CREATE OR REPLACE FUNCTION _rrule.rruleset_array_contains_timestamp(_rrule.RRULESET[], TIMESTAMP)
-RETURNS BOOLEAN AS $$
+$$;
+CREATE FUNCTION _rrule.rruleset(text) RETURNS _rrule.rruleset
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  WITH "dtstart-line" AS (SELECT _rrule.parse_line($1::text, 'DTSTART') as "x"),
+  "dtend-line" AS (SELECT _rrule.parse_line($1::text, 'DTEND') as "x"),
+  "exrule-line" AS (SELECT _rrule.parse_line($1::text, 'EXRULE') as "x")
+  SELECT
+    (SELECT "x"::timestamp FROM "dtstart-line" LIMIT 1) AS "dtstart",
+    (SELECT "x"::timestamp FROM "dtend-line" LIMIT 1) AS "dtend",
+    (SELECT _rrule.rrule($1::text) "rrule") as "rrule",
+    (SELECT _rrule.rrule("x"::text) "rrule" FROM "exrule-line") as "exrule",
+    NULL::TIMESTAMP[] "rdate",
+    NULL::TIMESTAMP[] "exdate";
+$_$;
+CREATE FUNCTION _rrule.rruleset_array_contains_timestamp(_rrule.rruleset[], timestamp without time zone) RETURNS boolean
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $_$
 DECLARE
   item _rrule.RRULESET;
 BEGIN
@@ -918,20 +741,12 @@ BEGIN
       RETURN true;
     END IF;
   END LOOP;
-
   RETURN false;
 END;
-$$ LANGUAGE plpgsql IMMUTABLE STRICT;
-CREATE OR REPLACE FUNCTION _rrule.rruleset_has_after_timestamp(_rrule.RRULESET, TIMESTAMP)
-RETURNS BOOLEAN AS $$
-  SELECT count(*) > 0 FROM _rrule.after($1, $2) LIMIT 1;
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-CREATE OR REPLACE FUNCTION _rrule.rruleset_has_before_timestamp(_rrule.RRULESET, TIMESTAMP)
-RETURNS BOOLEAN AS $$
-  SELECT count(*) > 0 FROM _rrule.before($1, $2) LIMIT 1;
-$$ LANGUAGE SQL IMMUTABLE STRICT;
-CREATE OR REPLACE FUNCTION _rrule.rruleset_array_has_after_timestamp(_rrule.RRULESET[], TIMESTAMP)
-RETURNS BOOLEAN AS $$
+$_$;
+CREATE FUNCTION _rrule.rruleset_array_has_after_timestamp(_rrule.rruleset[], timestamp without time zone) RETURNS boolean
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $_$
 DECLARE
   item _rrule.RRULESET;
 BEGIN
@@ -941,12 +756,12 @@ BEGIN
       RETURN true;
     END IF;
   END LOOP;
-
   RETURN false;
 END;
-$$ LANGUAGE plpgsql IMMUTABLE STRICT;
-CREATE OR REPLACE FUNCTION _rrule.rruleset_array_has_before_timestamp(_rrule.RRULESET[], TIMESTAMP)
-RETURNS BOOLEAN AS $$
+$_$;
+CREATE FUNCTION _rrule.rruleset_array_has_before_timestamp(_rrule.rruleset[], timestamp without time zone) RETURNS boolean
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $_$
 DECLARE
   item _rrule.RRULESET;
 BEGIN
@@ -956,101 +771,134 @@ BEGIN
       RETURN true;
     END IF;
   END LOOP;
-
   RETURN false;
 END;
-$$ LANGUAGE plpgsql IMMUTABLE STRICT;
-CREATE OPERATOR = (
-  LEFTARG = _rrule.RRULE,
-  RIGHTARG = _rrule.RRULE,
-  PROCEDURE = _rrule.compare_equal,
-  NEGATOR = <>,
-  COMMUTATOR = =
-);
-
-CREATE OPERATOR <> (
-  LEFTARG = _rrule.RRULE,
-  RIGHTARG = _rrule.RRULE,
-  PROCEDURE = _rrule.compare_not_equal,
-  NEGATOR = =,
-  COMMUTATOR = <>
-);
-
-CREATE OPERATOR @> (
-  LEFTARG = _rrule.RRULE,
-  RIGHTARG = _rrule.RRULE,
-  PROCEDURE = _rrule.contains,
-  COMMUTATOR = <@
-);
-
-CREATE OPERATOR <@ (
-  LEFTARG = _rrule.RRULE,
-  RIGHTARG = _rrule.RRULE,
-  PROCEDURE = _rrule.contained_by,
-  COMMUTATOR = @>
-);
-
-CREATE OPERATOR @> (
-  LEFTARG = _rrule.RRULESET,
-  RIGHTARG = TIMESTAMP,
-  PROCEDURE = _rrule.contains_timestamp
-);
-
-CREATE OPERATOR @> (
-  LEFTARG = _rrule.RRULESET[],
-  RIGHTARG = TIMESTAMP,
-  PROCEDURE = _rrule.rruleset_array_contains_timestamp
-);
-
-
-CREATE OPERATOR > (
-  LEFTARG = _rrule.RRULESET[],
-  RIGHTARG = TIMESTAMP,
-  PROCEDURE = _rrule.rruleset_array_has_after_timestamp
-);
-
-CREATE OPERATOR < (
-  LEFTARG = _rrule.RRULESET[],
-  RIGHTARG = TIMESTAMP,
-  PROCEDURE = _rrule.rruleset_array_has_before_timestamp
-);
-
-CREATE OPERATOR > (
-  LEFTARG = _rrule.RRULESET,
-  RIGHTARG = TIMESTAMP,
-  PROCEDURE = _rrule.rruleset_has_after_timestamp
-);
-
-CREATE OPERATOR < (
-  LEFTARG = _rrule.RRULESET,
-  RIGHTARG = TIMESTAMP,
-  PROCEDURE = _rrule.rruleset_has_before_timestamp
-);
-
-CREATE CAST (TEXT AS _rrule.RRULE)
-  WITH FUNCTION _rrule.rrule(TEXT)
-  AS IMPLICIT;
-
-
-CREATE CAST (TEXT AS _rrule.RRULESET)
-  WITH FUNCTION _rrule.rruleset(TEXT)
-  AS IMPLICIT;
-
-
-CREATE CAST (jsonb AS _rrule.RRULE)
-  WITH FUNCTION _rrule.jsonb_to_rrule(jsonb)
-  AS IMPLICIT;
-
-
-CREATE CAST (_rrule.RRULE AS jsonb)
-  WITH FUNCTION _rrule.rrule_to_jsonb(_rrule.RRULE)
-  AS IMPLICIT;
-					 
-CREATE CAST (jsonb AS _rrule.RRULESET)
-  WITH FUNCTION _rrule.jsonb_to_rruleset(jsonb)
-  AS IMPLICIT;
-
-
+$_$;
+CREATE FUNCTION _rrule.rruleset_array_to_jsonb(input _rrule.rruleset[]) RETURNS jsonb
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $$
+DECLARE
+  item _rrule.RRULESET;
+  out jsonb := '[]'::jsonb;
+BEGIN
+  FOREACH item IN ARRAY "input" LOOP
+    out := (SELECT out || _rrule.rruleset_to_jsonb(item));
+  END LOOP;
+  RETURN out;
+END;
+$$;
+CREATE FUNCTION _rrule.rruleset_has_after_timestamp(_rrule.rruleset, timestamp without time zone) RETURNS boolean
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  SELECT count(*) > 0 FROM _rrule.after($1, $2) LIMIT 1;
+$_$;
+CREATE FUNCTION _rrule.rruleset_has_before_timestamp(_rrule.rruleset, timestamp without time zone) RETURNS boolean
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  SELECT count(*) > 0 FROM _rrule.before($1, $2) LIMIT 1;
+$_$;
+CREATE FUNCTION _rrule.rruleset_to_jsonb(input _rrule.rruleset) RETURNS jsonb
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $$
+DECLARE
+  rrule jsonb;
+  exrule jsonb;
+BEGIN
+  SELECT _rrule.rrule_to_jsonb("input"."rrule")
+  INTO rrule;
+  SELECT _rrule.rrule_to_jsonb("input"."exrule")
+  INTO exrule;
+  RETURN jsonb_strip_nulls(jsonb_build_object(
+    'dtstart', "input"."dtstart",
+    'dtend', "input"."dtend",
+    'rrule', rrule,
+    'exrule', exrule,
+    'rdate', "input"."rdate",
+    'exdate', "input"."exdate"
+  ));
+END;
+$$;
+CREATE FUNCTION _rrule.text(_rrule.rrule) RETURNS text
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $_$
+  SELECT regexp_replace(
+    'RRULE:'
+    || COALESCE('FREQ=' || $1."freq" || ';', '')
+    || CASE WHEN $1."interval" = 1 THEN '' ELSE COALESCE('INTERVAL=' || $1."interval" || ';', '') END
+    || COALESCE('COUNT=' || $1."count" || ';', '')
+    || COALESCE('UNTIL=' || $1."until" || ';', '')
+    || COALESCE('BYSECOND=' || _rrule.array_join($1."bysecond", ',') || ';', '')
+    || COALESCE('BYMINUTE=' || _rrule.array_join($1."byminute", ',') || ';', '')
+    || COALESCE('BYHOUR=' || _rrule.array_join($1."byhour", ',') || ';', '')
+    || COALESCE('BYDAY=' || _rrule.array_join($1."byday", ',') || ';', '')
+    || COALESCE('BYMONTHDAY=' || _rrule.array_join($1."bymonthday", ',') || ';', '')
+    || COALESCE('BYYEARDAY=' || _rrule.array_join($1."byyearday", ',') || ';', '')
+    || COALESCE('BYWEEKNO=' || _rrule.array_join($1."byweekno", ',') || ';', '')
+    || COALESCE('BYMONTH=' || _rrule.array_join($1."bymonth", ',') || ';', '')
+    || COALESCE('BYSETPOS=' || _rrule.array_join($1."bysetpos", ',') || ';', '')
+    || CASE WHEN $1."wkst" = 'MO' THEN '' ELSE COALESCE('WKST=' || $1."wkst" || ';', '') END
+  , ';$', '');
+$_$;
+CREATE FUNCTION _rrule.timestamp_to_day(ts timestamp without time zone) RETURNS _rrule.day
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  SELECT CAST(CASE to_char("ts", 'DY')
+    WHEN 'MON' THEN 'MO'
+    WHEN 'TUE' THEN 'TU'
+    WHEN 'WED' THEN 'WE'
+    WHEN 'THU' THEN 'TH'
+    WHEN 'FRI' THEN 'FR'
+    WHEN 'SAT' THEN 'SA'
+    WHEN 'SUN' THEN 'SU'
+  END as _rrule.DAY);
+$$;
+CREATE FUNCTION _rrule.until(rrule _rrule.rrule, dtstart timestamp without time zone) RETURNS timestamp without time zone
+    LANGUAGE sql IMMUTABLE STRICT
+    AS $$
+  SELECT min("until")
+  FROM (
+    SELECT "rrule"."until"
+    UNION
+    SELECT "dtstart" + _rrule.build_interval("rrule"."interval", "rrule"."freq") * COALESCE("rrule"."count", CASE WHEN "rrule"."until" IS NOT NULL THEN NULL ELSE 1 END) AS "until"
+  ) "until" GROUP BY ();
+$$;
+COMMENT ON FUNCTION _rrule.until(rrule _rrule.rrule, dtstart timestamp without time zone) IS 'The calculated "until"" timestamp for the given rrule+dtstart';
+CREATE FUNCTION _rrule.validate_rrule(result _rrule.rrule) RETURNS void
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $$
+BEGIN
+  -- FREQ is required
+  IF result."freq" IS NULL THEN
+    RAISE EXCEPTION 'FREQ cannot be null';
+  END IF;
+  -- FREQ=YEARLY required if BYWEEKNO is provided
+  IF result."byweekno" IS NOT NULL AND result."freq" != 'YEARLY' THEN
+    RAISE EXCEPTION 'FREQ must be YEARLY if BYWEEKNO is provided.';
+  END IF;
+  -- Limits on FREQ if byyearday is selected
+  IF (result."freq" <> 'YEARLY' AND result."byyearday" IS NOT NULL) THEN
+    RAISE EXCEPTION 'BYYEARDAY is only valid when FREQ is YEARLY.';
+  END IF;
+  IF (result."freq" = 'WEEKLY' AND result."bymonthday" IS NOT NULL) THEN
+    RAISE EXCEPTION 'BYMONTHDAY is not valid when FREQ is WEEKLY.';
+  END IF;
+  -- BY[something-else] is required if BYSETPOS is set.
+  IF (result."bysetpos" IS NOT NULL AND result."bymonth" IS NULL AND result."byweekno" IS NULL AND result."byyearday" IS NULL AND result."bymonthday" IS NULL AND result."byday" IS NULL AND result."byhour" IS NULL AND result."byminute" IS NULL AND result."bysecond" IS NULL) THEN
+    RAISE EXCEPTION 'BYSETPOS requires at least one other BY*';
+  END IF;
+  IF result."freq" = 'DAILY' AND result."byday" IS NOT NULL THEN
+    RAISE EXCEPTION 'BYDAY is not valid when FREQ is DAILY.';
+  END IF;
+  IF result."until" IS NOT NULL AND result."count" IS NOT NULL THEN
+    RAISE EXCEPTION 'UNTIL and COUNT MUST NOT occur in the same recurrence.';
+  END IF;
+  IF result."interval" IS NOT NULL THEN
+    IF (NOT result."interval" > 0) THEN
+      RAISE EXCEPTION 'INTERVAL must be a non-zero integer.';
+    END IF;
+  END IF;
+END;
+$$;
 CREATE FUNCTION crm."checkProductTypeInOrderCart"(producttype text, cartinfo jsonb) RETURNS boolean
     LANGUAGE plpgsql STABLE
     AS $$
@@ -1120,6 +968,46 @@ BEGIN
    SELECT age(create_at) FROM "order"."order" WHERE "order"."keycloakId" = "keycloakId" ORDER BY created_at DESC LIMIT 1;
 END
 $$;
+CREATE OR REPLACE FUNCTION crm."deductLoyaltyPointsPostOrder"()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    cart record;
+    amount numeric;
+    loyaltyPointId int;
+    setting record;
+    temp record;
+    rate numeric;
+BEGIN
+    SELECT * FROM crm."orderCart" WHERE id = NEW."cartId" INTO cart;
+    SELECT id FROM crm."loyaltyPoint" WHERE "keycloakId" = NEW."keycloakId" AND "brandId" = NEW."brandId" INTO loyaltyPointId; 
+    IF cart."loyaltyPointsUsed" > 0 THEN
+        SELECT crm."getLoyaltyPointsConversionRate"(NEW."brandId") INTO rate;
+        amount := ROUND((cart."loyaltyPointsUsed" * rate), 2);
+        INSERT INTO crm."loyaltyPointTransaction"("loyaltyPointId", "points", "orderCartId", "type", "amountRedeemed")
+        VALUES (loyaltyPointId, cart."loyaltyPointsUsed", cart.id, 'DEBIT', amount);
+    END IF;
+    RETURN NULL;
+END
+$function$;
+
+CREATE FUNCTION crm."deductWalletAmountPostOrder"() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    cart record;
+    walletId int;
+BEGIN
+    SELECT * FROM crm."orderCart" WHERE id = NEW."cartId" INTO cart;
+    SELECT id FROM crm."wallet" WHERE "keycloakId" = NEW."keycloakId" AND "brandId" = NEW."brandId" INTO walletId; 
+    IF cart."walletAmountUsed" > 0 THEN
+        INSERT INTO crm."walletTransaction"("walletId", "amount", "orderCartId", "type")
+        VALUES (walletId, cart."walletAmountUsed", cart.id, 'DEBIT');
+    END IF;
+    RETURN NULL;
+END
+$$;
 CREATE TABLE crm."orderCart" (
     id integer NOT NULL,
     "cartInfo" jsonb NOT NULL,
@@ -1142,10 +1030,14 @@ CREATE TABLE crm."orderCart" (
     "cartSource" text,
     "subscriptionOccurenceId" integer,
     updated_at timestamp with time zone DEFAULT now(),
-    "walletAmount" numeric DEFAULT 0,
+    "walletAmountUsed" numeric DEFAULT 0,
     "isTest" boolean DEFAULT false NOT NULL,
     "brandId" integer DEFAULT 1 NOT NULL,
-    "couponDiscount" numeric DEFAULT 0 NOT NULL
+    "couponDiscount" numeric DEFAULT 0 NOT NULL,
+    "loyaltyPointsUsed" integer DEFAULT 0 NOT NULL,
+    "paymentId" uuid,
+    "paymentUpdatedAt" timestamp with time zone,
+    "paymentRequestInfo" jsonb
 );
 CREATE FUNCTION crm.deliveryprice(ordercart crm."orderCart") RETURNS numeric
     LANGUAGE plpgsql STABLE
@@ -1193,22 +1085,83 @@ BEGIN
             THEN
             IF  reward."rewardValue"->>'type' = 'conditional'
                 THEN 
-                discount := totalPrice * ((reward."rewardValue"->'value'->'percentage')::numeric / 100);
-                IF discount >  (reward."rewardValue"->'value'->'max')::numeric
-                    THEN discount := (reward."rewardValue"->'value'->'max')::numeric;
+                discount := totalPrice * ((reward."rewardValue"->'value'->>'percentage')::numeric / 100);
+                IF discount >  (reward."rewardValue"->'value'->>'max')::numeric
+                    THEN discount := (reward."rewardValue"->'value'->>'max')::numeric;
                 END IF;
+            ELSIF reward."rewardValue"->>'type' = 'absolute' THEN
+                discount := (reward."rewardValue"->>'value')::numeric;
             ELSE
-                discount := (reward."rewardValue"->'value')::numeric;
+                discount := 0;
             END IF;
         END IF;
     END LOOP;
+    IF discount > totalPrice THEN
+        discount := totalPrice;
+    END IF;
     RETURN ROUND(discount, 2);
 END;
 $$;
-CREATE FUNCTION crm.iscartvalid(ordercart crm."orderCart") RETURNS jsonb
+CREATE OR REPLACE FUNCTION crm."getLoyaltyPointsConversionRate"(brandid integer)
+ RETURNS numeric
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    setting record;
+    temp record;
+BEGIN
+        SELECT * FROM brands."storeSetting" WHERE "type" = 'rewards' and "identifier" = 'Loyalty Points Usage' INTO setting;
+        SELECT * FROM brands."brand_storeSetting" WHERE "brandId" = brandId AND "storeSettingId" = setting.id INTO temp;
+        IF temp IS NOT NULL THEN
+            setting := temp;
+        END IF;
+        RETURN ROUND((setting."value"->>'conversionRate')::numeric, 2);
+    RETURN NULL;
+END
+$function$;
+CREATE TABLE crm.campaign (
+    id integer NOT NULL,
+    type text NOT NULL,
+    "metaDetails" jsonb,
+    "conditionId" integer,
+    "isRewardMulti" boolean DEFAULT false NOT NULL,
+    "isActive" boolean DEFAULT false NOT NULL,
+    priority integer DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    "isArchived" boolean DEFAULT false NOT NULL
+);
+CREATE FUNCTION crm.iscampaignvalid(campaign crm.campaign) RETURNS jsonb
     LANGUAGE plpgsql STABLE
     AS $$
+DECLARE
+    res json;
+    temp int;
 BEGIN
+    SELECT COUNT(*) FROM crm."reward" WHERE "campaignId" = campaign."id" LIMIT 1 into temp;
+    IF campaign."conditionId" IS NULL AND temp < 1
+        THEN res := json_build_object('status', false, 'error', 'Campaign Condition Or Reward not provided');
+    ELSEIF campaign."conditionId" IS NULL
+        THEN res := json_build_object('status', false, 'error', 'Campaign Condition not provided');
+    ELSEIF temp < 1
+        THEN res := json_build_object('status', false, 'error', 'Reward not provided');
+    ELSEIF campaign."metaDetails"->'image' IS NULL
+        THEN res := json_build_object('status', false, 'error', 'Image not provided');
+    ELSEIF campaign."metaDetails"->'description' IS NULL
+        THEN res := json_build_object('status', false, 'error', 'Description not provided');
+    ELSE
+        res := json_build_object('status', true, 'error', '');
+    END IF;
+    RETURN res;
+END
+$$;
+CREATE FUNCTION crm.iscartvalid(ordercart crm."orderCart") RETURNS jsonb
+    LANGUAGE plpgsql STABLE
+    AS $_$
+DECLARE
+    totalPrice numeric := 0;
+BEGIN
+    SELECT crm.totalPrice(ordercart.*) INTO totalPrice;
     IF JSONB_ARRAY_LENGTH(ordercart."cartInfo"->'products') = 0
         THEN RETURN json_build_object('status', false, 'error', 'No items in cart!');
     ELSIF ordercart."customerInfo" IS NULL OR ordercart."customerInfo"->>'customerFirstName' IS NULL 
@@ -1219,9 +1172,47 @@ BEGIN
         THEN RETURN json_build_object('status', false, 'error', 'No fulfillment mode selected!');
     ELSIF ordercart."address" IS NULL AND ordercart."fulfillmentInfo"::json->>'type' LIKE '%DELIVERY' 
         THEN RETURN json_build_object('status', false, 'error', 'No address selected for delivery!');
+    ELSIF totalPrice > 0 AND totalPrice <= 0.5
+        THEN RETURN json_build_object('status', false, 'error', 'Transaction amount should be greater than $0.5!');
     ELSE
         RETURN json_build_object('status', true, 'error', '');
     END IF;
+END
+$_$;
+CREATE TABLE crm.coupon (
+    id integer NOT NULL,
+    "isActive" boolean DEFAULT false NOT NULL,
+    "metaDetails" jsonb,
+    code text NOT NULL,
+    "isRewardMulti" boolean DEFAULT false NOT NULL,
+    "visibleConditionId" integer,
+    "isVoucher" boolean DEFAULT false NOT NULL,
+    "isArchived" boolean DEFAULT false NOT NULL
+);
+CREATE FUNCTION crm.iscouponvalid(coupon crm.coupon) RETURNS jsonb
+    LANGUAGE plpgsql STABLE
+    AS $$
+DECLARE
+    res json;
+    temp int;
+BEGIN
+    SELECT COUNT(*) FROM crm."reward" WHERE "couponId" = coupon."id" into temp;
+    IF coupon."visibleConditionId" IS NULL AND temp < 1
+        THEN res := json_build_object('status', false, 'error', 'Coupon Condition Or Reward not provided');
+    ELSEIF coupon."visibleConditionId" IS NULL
+        THEN res := json_build_object('status', false, 'error', 'Coupon Condition not provided');
+    ELSEIF temp < 1
+        THEN res := json_build_object('status', false, 'error', 'Reward not provided');
+    ELSEIF coupon."metaDetails"->'image' IS NULL
+        THEN res := json_build_object('status', false, 'error', 'Image not provided');
+    ELSEIF coupon."metaDetails"->'title' IS NULL
+        THEN res := json_build_object('status', false, 'error', 'Title not provided');
+    ELSEIF coupon."metaDetails"->'description' IS NULL
+        THEN res := json_build_object('status', false, 'error', 'Description not provided');
+    ELSE
+        res := json_build_object('status', true, 'error', '');
+    END IF;
+    RETURN res;
 END
 $$;
 CREATE FUNCTION crm.itemtotal(ordercart crm."orderCart") RETURNS numeric
@@ -1293,6 +1284,54 @@ BEGIN
   RETURN json_build_object('value', loyaltyPoints, 'valueType','integer','argument','keycloakId');
 END;
 $$;
+CREATE OR REPLACE FUNCTION crm."loyaltyPointsUsable"(ordercart crm."orderCart")
+ RETURNS integer
+ LANGUAGE plpgsql
+ STABLE
+AS $function$
+DECLARE
+   setting record;
+   temp record;
+   itemTotal numeric;
+   deliveryPrice numeric;
+   tax numeric;
+   discount numeric;
+   totalPrice numeric;
+   amount numeric;
+   rate numeric;
+   pointsUsable int := 0;
+   balance int;
+BEGIN
+    SELECT * FROM brands."storeSetting" WHERE "identifier" = 'Loyalty Points Usage' AND "type" = 'rewards' INTO setting;
+    SELECT * FROM brands."brand_storeSetting" WHERE "storeSettingId" = setting.id AND "brandId" = ordercart."brandId" INTO temp;
+    IF temp IS NOT NULL THEN
+        setting := temp;
+    END IF;
+    IF setting IS NULL THEN
+        RETURN pointsUsable;
+    END IF;
+    SELECT crm.itemtotal(ordercart.*) into itemTotal;
+    SELECT crm.deliveryprice(ordercart.*) into deliveryPrice;
+    SELECT crm.tax(ordercart.*) into tax;
+    SELECT crm.discount(ordercart.*) into discount;
+    totalPrice := ROUND(itemTotal + deliveryPrice + ordercart.tip  + tax - ordercart."walletAmountUsed" - discount, 2);
+    amount := ROUND(totalPrice * ((setting.value->>'percentage')::float / 100));
+    IF amount > (setting.value->>'max')::int THEN
+        amount := (setting.value->>'max')::int;
+    END IF;
+    SELECT crm."getLoyaltyPointsConversionRate"(ordercart."brandId") INTO rate;
+    pointsUsable = ROUND(amount / rate);
+    SELECT points FROM crm."loyaltyPoint" WHERE "keycloakId" = ordercart."customerKeycloakId" AND "brandId" = ordercart."brandId" INTO balance;
+    IF pointsUsable > balance THEN
+        pointsUsable := balance;
+    END IF;
+    -- if usable changes after cart update, then update used points
+    IF ordercart."loyaltyPointsUsed" > pointsUsable THEN
+        PERFORM crm."setLoyaltyPointsUsedInCart"(ordercart.id, pointsUsable);
+    END IF;
+    RETURN pointsUsable;
+END;
+$function$;
 CREATE FUNCTION crm."orderAmount"(fact crm.fact, params jsonb) RETURNS jsonb
     LANGUAGE plpgsql STABLE
     AS $$
@@ -1322,7 +1361,7 @@ DECLARE
     rewardIds int[];
     params jsonb;
 BEGIN
-    params := jsonb_build_object('keycloakId', NEW."keycloakId", 'orderId', NEW.id, 'cartId', NEW."cartId", 'campaignType', 'Post Order');
+    params := jsonb_build_object('keycloakId', NEW."keycloakId", 'orderId', NEW.id, 'cartId', NEW."cartId", 'brandId', NEW."brandId", 'campaignType', 'Post Order');
     FOR rec IN SELECT * FROM crm."orderCart_rewards" WHERE "orderCartId" = NEW."cartId" LOOP
         -- SELECT * FROM crm.reward WHERE id = rec."rewardId" INTO reward;
         -- IF reward."type" = 'Loyalty Point Credit' OR reward."type" = 'Wallet Amount Credit' THEN
@@ -1381,11 +1420,11 @@ BEGIN
             END IF;
             INSERT INTO crm."loyaltyPointTransaction" ("loyaltyPointId", "points", "type")VALUES(loyaltyPointId, pointsToBeCredited, 'CREDIT') RETURNING id INTO returnedId;
             IF reward."couponId" IS NOT NULL THEN
-                INSERT INTO crm."rewardHistory"("rewardId", "couponId", "keycloakId", "orderCartId", "orderId", "loyaltyPointTransactionId", "loyaltyPoints")
-                VALUES(reward.id, reward."couponId", params->>'keycloakId', (params->>'cartId')::int, (params->>'orderId')::int, returnedId, pointsToBeCredited);
+                INSERT INTO crm."rewardHistory"("rewardId", "couponId", "keycloakId", "orderCartId", "orderId", "loyaltyPointTransactionId", "loyaltyPoints", "brandId")
+                VALUES(reward.id, reward."couponId", params->>'keycloakId', (params->>'cartId')::int, (params->>'orderId')::int, returnedId, pointsToBeCredited, (params->>'brandId')::int);
             ELSE
-                INSERT INTO crm."rewardHistory"("rewardId", "campaignId", "keycloakId", "orderCartId", "orderId", "loyaltyPointTransactionId", "loyaltyPoints")
-                VALUES(reward.id, reward."campaignId", params->>'keycloakId', (params->>'cartId')::int, (params->>'orderId')::int, returnedId, pointsToBeCredited);
+                INSERT INTO crm."rewardHistory"("rewardId", "campaignId", "keycloakId", "orderCartId", "orderId", "loyaltyPointTransactionId", "loyaltyPoints", "brandId")
+                VALUES(reward.id, reward."campaignId", params->>'keycloakId', (params->>'cartId')::int, (params->>'orderId')::int, returnedId, pointsToBeCredited, (params->>'brandId')::int);
             END IF;
         ELSIF reward."type" = 'Wallet Amount Credit' THEN
             SELECT id FROM crm."wallet" WHERE "keycloakId" = params->>'keycloakId' INTO walletId;
@@ -1402,16 +1441,16 @@ BEGIN
             END IF;
             INSERT INTO crm."walletTransaction" ("walletId", "amount", "type") VALUES(walletId, amountToBeCredited, 'CREDIT') RETURNING id INTO returnedId;
             IF reward."couponId" IS NOT NULL THEN
-                INSERT INTO crm."rewardHistory"("rewardId", "couponId", "keycloakId", "orderCartId", "orderId", "walletTransactionId", "walletAmount")
-                VALUES(reward.id, reward."couponId", params->>'keycloakId', (params->>'cartId')::int, (params->>'orderId')::int, returnedId, amountToBeCredited);
+                INSERT INTO crm."rewardHistory"("rewardId", "couponId", "keycloakId", "orderCartId", "orderId", "walletTransactionId", "walletAmount", "brandId")
+                VALUES(reward.id, reward."couponId", params->>'keycloakId', (params->>'cartId')::int, (params->>'orderId')::int, returnedId, amountToBeCredited, (params->>'brandId')::int);
             ELSE
-                INSERT INTO crm."rewardHistory"("rewardId", "campaignId", "keycloakId", "orderCartId", "orderId", "walletTransactionId", "walletAmount")
-                VALUES(reward.id, reward."campaignId", params->>'keycloakId', (params->>'cartId')::int, (params->>'orderId')::int, returnedId, amountToBeCredited);
+                INSERT INTO crm."rewardHistory"("rewardId", "campaignId", "keycloakId", "orderCartId", "orderId", "walletTransactionId", "walletAmount", "brandId")
+                VALUES(reward.id, reward."campaignId", params->>'keycloakId', (params->>'cartId')::int, (params->>'orderId')::int, returnedId, amountToBeCredited, (params->>'brandId')::int);
             END IF;
         ELSIF reward."type" = 'Discount' THEN
             IF reward."couponId" IS NOT NULL THEN
-                INSERT INTO crm."rewardHistory"("rewardId", "couponId", "keycloakId", "orderCartId", "orderId", "discount")
-                VALUES(reward.id, reward."couponId", params->>'keycloakId', (params->>'cartId')::int, (params->>'orderId')::int, (SELECT "couponDiscount" FROM crm."orderCart" WHERE id = (params->>'cartId')::int));
+                INSERT INTO crm."rewardHistory"("rewardId", "couponId", "keycloakId", "orderCartId", "orderId", "discount", "brandId")
+                VALUES(reward.id, reward."couponId", params->>'keycloakId', (params->>'cartId')::int, (params->>'orderId')::int, (SELECT "couponDiscount" FROM crm."orderCart" WHERE id = (params->>'cartId')::int), (params->>'brandId')::int);
             END IF;
         ELSE
             CONTINUE;
@@ -1539,6 +1578,25 @@ BEGIN
     RETURN NULL;
 END;
 $$;
+CREATE OR REPLACE FUNCTION crm."setLoyaltyPointsUsedInCart"(cartid integer, points integer)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    UPDATE crm."orderCart"
+    SET "loyaltyPointsUsed" = points
+    WHERE id = cartId;
+END
+$function$;
+CREATE FUNCTION crm."setWalletAmountUsedInCart"(cartid integer, validamount numeric) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    UPDATE crm."orderCart"
+    SET "walletAmountUsed" = validAmount
+    WHERE id = cartId;
+END
+$$;
 CREATE FUNCTION crm.set_current_timestamp_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -1577,23 +1635,75 @@ BEGIN
     RETURN 2.5;
 END
 $$;
-CREATE FUNCTION crm.totalprice(ordercart crm."orderCart") RETURNS numeric
-    LANGUAGE plpgsql STABLE
-    AS $$
+CREATE OR REPLACE FUNCTION crm.totalprice(ordercart crm."orderCart")
+ RETURNS numeric
+ LANGUAGE plpgsql
+ STABLE
+AS $function$
 DECLARE
    totalPrice numeric;
    tax numeric;
    itemTotal numeric;
    deliveryPrice numeric;
    discount numeric;
+   rate numeric;
+   loyaltyPointsAmount numeric := 0;
 BEGIN
     SELECT crm.itemtotal(ordercart.*) into itemTotal;
     SELECT crm.deliveryprice(ordercart.*) into deliveryPrice;
     SELECT crm.tax(ordercart.*) into tax;
     SELECT crm.discount(ordercart.*) into discount;
-    totalPrice := ROUND(itemTotal + deliveryPrice + ordercart.tip - COALESCE(ordercart."walletAmount", 0) + tax - discount, 2);
+    IF ordercart."loyaltyPointsUsed" > 0 THEN
+        SELECT crm."getLoyaltyPointsConversionRate"(ordercart."brandId") INTO rate;
+        loyaltyPointsAmount := ROUND(rate * ordercart."loyaltyPointsUsed", 2);
+    END IF;
+    totalPrice := ROUND(itemTotal + deliveryPrice + ordercart.tip - COALESCE(ordercart."walletAmountUsed", 0) - loyaltyPointsAmount  + tax - discount, 2);
     RETURN totalPrice;
 END
+$function$;
+CREATE FUNCTION crm."walletAmountUsable"(ordercart crm."orderCart") RETURNS numeric
+    LANGUAGE plpgsql STABLE
+    AS $$
+DECLARE
+   setting record;
+   temp record;
+   itemTotal numeric;
+   deliveryPrice numeric;
+   tax numeric;
+   discount numeric;
+   totalPrice numeric;
+   rate numeric;
+   pointsAmount numeric := 0;
+   amountUsable numeric := 0;
+   balance numeric;
+BEGIN
+    SELECT * FROM brands."storeSetting" WHERE "identifier" = 'Loyalty Points Usage' AND "type" = 'rewards' INTO setting;
+    SELECT * FROM brands."brand_storeSetting" WHERE "storeSettingId" = setting.id AND "brandId" = ordercart."brandId" INTO temp;
+    IF temp IS NOT NULL THEN
+        setting := temp;
+    END IF;
+    SELECT crm.itemtotal(ordercart.*) into itemTotal;
+    SELECT crm.deliveryprice(ordercart.*) into deliveryPrice;
+    SELECT crm.tax(ordercart.*) into tax;
+    SELECT crm.discount(ordercart.*) into discount;
+    totalPrice := ROUND(itemTotal + deliveryPrice + ordercart.tip  + tax - discount, 2);
+    amountUsable := totalPrice;
+    -- if loyalty points are used
+    IF ordercart."loyaltyPointsUsed" > 0 THEN
+        SELECT crm."getLoyaltyPointsConversionRate"(ordercart."brandId") INTO rate;
+        pointsAmount := rate * ordercart."loyaltyPointsUsed";
+        amountUsable := amountUsable - pointsAmount;
+    END IF;
+    SELECT amount FROM crm."wallet" WHERE "keycloakId" = ordercart."customerKeycloakId" AND "brandId" = ordercart."brandId" INTO balance;
+    IF amountUsable > balance THEN
+        amountUsable := balance;
+    END IF;
+    -- if usable changes after cart update, then update used amount
+    IF ordercart."walletAmountUsed" > amountUsable THEN
+        PERFORM crm."setWalletAmountUsedInCart"(ordercart.id, amountUsable);
+    END IF;
+    RETURN amountUsable;
+END;
 $$;
 CREATE FUNCTION "deviceHub".set_current_timestamp_updated_at() RETURNS trigger
     LANGUAGE plpgsql
@@ -1671,9 +1781,11 @@ BEGIN
   RETURN _new;
 END;
 $$;
-CREATE FUNCTION ingredient."MOFCost"(mofid integer) RETURNS numeric
-    LANGUAGE plpgsql STABLE
-    AS $$
+CREATE OR REPLACE FUNCTION ingredient."MOFCost"(mofid integer)
+ RETURNS numeric
+ LANGUAGE plpgsql
+ STABLE
+AS $function$
 DECLARE
     mof record;
     bulkItemId int;
@@ -1689,13 +1801,13 @@ BEGIN
     END IF;
     SELECT "supplierItemId" FROM inventory."bulkItem" WHERE id = bulkItemId into supplierItemId;
     SELECT * FROM inventory."supplierItem" WHERE id = supplierItemId into supplierItem;
-    IF supplierItem.prices IS NULL
+    IF supplierItem.prices IS NULL OR supplierItem.prices->0->'unitPrice'->>'value' = ''
         THEN RETURN 0;
     ELSE
         RETURN (supplierItem.prices->0->'unitPrice'->>'value')::numeric/supplierItem."unitSize";
     END IF;
 END
-$$;
+$function$;
 CREATE FUNCTION ingredient."MOFNutritionalInfo"(mofid integer) RETURNS jsonb
     LANGUAGE plpgsql STABLE
     AS $$
@@ -1725,7 +1837,8 @@ CREATE TABLE ingredient."ingredientSachet" (
     tracking boolean DEFAULT true NOT NULL,
     unit text NOT NULL,
     visibility boolean DEFAULT true NOT NULL,
-    "liveMOF" integer
+    "liveMOF" integer,
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE FUNCTION ingredient.cost(sachet ingredient."ingredientSachet") RETURNS numeric
     LANGUAGE plpgsql STABLE
@@ -1749,7 +1862,10 @@ CREATE TABLE ingredient."modeOfFulfillment" (
     "packagingId" integer,
     "isLive" boolean DEFAULT false NOT NULL,
     accuracy integer,
-    "sachetItemId" integer
+    "sachetItemId" integer,
+    "operationConfigId" integer NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
 );
 CREATE FUNCTION ingredient."getMOFCost"(mof ingredient."modeOfFulfillment") RETURNS numeric
     LANGUAGE plpgsql STABLE
@@ -1777,7 +1893,9 @@ CREATE TABLE ingredient.ingredient (
     image text,
     "isPublished" boolean DEFAULT false NOT NULL,
     category text,
-    "createdAt" date DEFAULT now()
+    "createdAt" date DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE FUNCTION ingredient.image_validity(ing ingredient.ingredient) RETURNS boolean
     LANGUAGE sql STABLE
@@ -1861,7 +1979,10 @@ CREATE TABLE "simpleRecipe"."simpleRecipe" (
     assets jsonb,
     ingredients jsonb,
     type text,
-    "isPublished" boolean DEFAULT false NOT NULL
+    "isPublished" boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE FUNCTION ingredient.issimplerecipevalid(recipe "simpleRecipe"."simpleRecipe") RETURNS jsonb
     LANGUAGE plpgsql STABLE
@@ -1976,6 +2097,17 @@ DECLARE
 BEGIN
   _new := NEW;
   _new."updatedAt" = NOW();
+  RETURN _new;
+END;
+$$;
+CREATE FUNCTION ingredient.set_current_timestamp_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  _new record;
+BEGIN
+  _new := NEW;
+  _new."updated_at" = NOW();
   RETURN _new;
 END;
 $$;
@@ -2158,22 +2290,38 @@ BEGIN
         SELECT * FROM products."simpleRecipeProduct" WHERE id = rec."simpleRecipeProductId" INTO product;
         productName := product.name;
         productType := 'simpleRecipeProduct';
-        productImage := 'https://images.unsplash.com/photo-1575808142341-e39853744dbd?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=842&q=80';
+        IF product.assets IS NOT NULL AND JSONB_ARRAY_LENGTH(product.assets->'images') > 0 THEN
+            productImage := product.assets->'images'#>>'{0}';
+        ELSE
+            productImage := NULL;
+        END IF;
     ELSIF rec."inventoryProductId" IS NOT NULL THEN
         SELECT * FROM products."inventoryProduct" WHERE id = rec."inventoryProductId" INTO product;
         productName := product.name;
         productType := 'inventoryProduct';
-        productImage := 'https://images.unsplash.com/photo-1575808142341-e39853744dbd?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=842&q=80';
+        IF product.assets IS NOT NULL AND JSONB_ARRAY_LENGTH(product.assets->'images') > 0 THEN
+            productImage := product.assets->'images'#>>'{0}';
+        ELSE
+            productImage := NULL;
+        END IF;
     ELSEIF rec."customizableProductId" IS NOT NULL THEN
         SELECT * FROM products."customizableProduct" WHERE id = rec."customizableProductId" INTO product;
         productName := product.name;
         productType := 'customizableProduct';
-        productImage := 'https://images.unsplash.com/photo-1575808142341-e39853744dbd?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=842&q=80';
+        IF product.assets IS NOT NULL AND JSONB_ARRAY_LENGTH(product.assets->'images') > 0 THEN
+            productImage := product.assets->'images'#>>'{0}';
+        ELSE
+            productImage := NULL;
+        END IF;
     ELSE
         SELECT * FROM products."comboProduct" WHERE id = rec."comboProductId" INTO product;
         productName := product.name;
         productType := 'comboProduct';
-        productImage := 'https://images.unsplash.com/photo-1575808142341-e39853744dbd?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=842&q=80';
+        IF product.assets IS NOT NULL AND JSONB_ARRAY_LENGTH(product.assets->'images') > 0 THEN
+            productImage := product.assets->'images'#>>'{0}';
+        ELSE
+            productImage := NULL;
+        END IF;
     END IF;
     RETURN jsonb_build_object(
         'name', productName,
@@ -2227,6 +2375,17 @@ BEGIN
     return res;
 END;
 $$;
+CREATE FUNCTION "onDemand".set_current_timestamp_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  _new record;
+BEGIN
+  _new := NEW;
+  _new."updated_at" = NOW();
+  RETURN _new;
+END;
+$$;
 CREATE FUNCTION "onlineStore"."SRPCartItem"("productId" integer, "optionId" integer) RETURNS jsonb
     LANGUAGE plpgsql STABLE
     AS $$
@@ -2269,7 +2428,9 @@ CREATE TABLE "onDemand".collection (
     name text,
     "startTime" time without time zone,
     "endTime" time without time zone,
-    rrule jsonb
+    rrule jsonb,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
 );
 CREATE FUNCTION "onlineStore"."isCollectionValid"(rec "onDemand".collection, params jsonb) RETURNS jsonb
     LANGUAGE plpgsql STABLE
@@ -2724,7 +2885,10 @@ CREATE TABLE products."customizableProductOption" (
     id integer NOT NULL,
     "simpleRecipeProductId" integer,
     "inventoryProductId" integer,
-    "customizableProductId" integer NOT NULL
+    "customizableProductId" integer NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE FUNCTION products."customizableProductOptionFullName"(option products."customizableProductOption") RETURNS text
     LANGUAGE plpgsql STABLE
@@ -2750,7 +2914,10 @@ CREATE TABLE products."comboProduct" (
     "productSku" uuid,
     "isPopupAllowed" boolean DEFAULT true NOT NULL,
     assets jsonb,
-    name text
+    name text,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE FUNCTION products."defaultComboProductCartItem"(product products."comboProduct") RETURNS jsonb
     LANGUAGE plpgsql STABLE
@@ -2835,7 +3002,10 @@ CREATE TABLE products."customizableProduct" (
     "isPublished" boolean DEFAULT false NOT NULL,
     "productSku" uuid,
     "isPopupAllowed" boolean DEFAULT true NOT NULL,
-    assets jsonb
+    assets jsonb,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE FUNCTION products."defaultCustomizableProductCartItem"(product products."customizableProduct") RETURNS jsonb
     LANGUAGE plpgsql STABLE
@@ -2880,7 +3050,7 @@ CREATE TABLE products."inventoryProduct" (
     id integer NOT NULL,
     "supplierItemId" integer,
     "sachetItemId" integer,
-    accompaniments jsonb,
+    recommendations jsonb,
     name text,
     tags jsonb,
     description text,
@@ -2889,7 +3059,10 @@ CREATE TABLE products."inventoryProduct" (
     "nameAsSupplier" boolean DEFAULT true,
     "productSku" uuid,
     "default" integer,
-    "isPopupAllowed" boolean DEFAULT true NOT NULL
+    "isPopupAllowed" boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE FUNCTION products."defaultInventoryProductCartItem"(product products."inventoryProduct") RETURNS jsonb
     LANGUAGE plpgsql STABLE
@@ -2922,14 +3095,17 @@ CREATE TABLE products."simpleRecipeProduct" (
     id integer NOT NULL,
     "simpleRecipeId" integer,
     name text NOT NULL,
-    accompaniments jsonb,
+    recommendations jsonb,
     tags jsonb,
     description text,
     assets jsonb,
     "default" integer,
     "isPublished" boolean DEFAULT false NOT NULL,
     "productSku" uuid,
-    "isPopupAllowed" boolean DEFAULT true NOT NULL
+    "isPopupAllowed" boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE FUNCTION products."defaultSimpleRecipeProductCartItem"(product products."simpleRecipeProduct") RETURNS jsonb
     LANGUAGE plpgsql STABLE
@@ -3002,6 +3178,90 @@ BEGIN
     );
 END
 $$;
+CREATE FUNCTION products."inventoryProductAllergens"(product products."inventoryProduct") RETURNS jsonb
+    LANGUAGE plpgsql STABLE
+    AS $$
+DECLARE
+    data jsonb;
+BEGIN
+    IF product."supplierItemId" IS NOT NULL THEN
+        SELECT allergens FROM inventory."bulkItem" WHERE id = (SELECT "bulkItemAsShippedId" FROM inventory."supplierItem" WHERE id = product."supplierItemId") INTO data;
+    ELSE
+        SELECT allergens FROM inventory."bulkItem" WHERE id = (SELECT "bulkItemId" FROM inventory."sachetItem" WHERE id = product."sachetItemId") INTO data;
+    END IF;
+    RETURN data;
+END;
+$$;
+CREATE FUNCTION products."inventoryProductCartItem"(product products."inventoryProduct", "optionId" integer) RETURNS jsonb
+    LANGUAGE plpgsql STABLE
+    AS $$
+DECLARE
+    option jsonb;
+BEGIN
+     SELECT json_build_object(
+            'id', id,
+            'quantity', quantity,
+            'label', label,
+            'price', CAST("price"->0->>'value' AS numeric),
+            'discount', CAST("price"->0->>'discount' AS numeric)
+        ) FROM "products"."inventoryProductOption" WHERE id = "optionId" into option;
+    RETURN json_build_object(
+        'id', product.id,
+        'name', product.name,
+        'type', 'inventoryProduct',
+        'image', product."assets"->'images'->0,
+        'option', option,
+        'discount', option->'discount',
+        'quantity', 1,
+        'unitPrice', option->'price',
+        'cartItemId', gen_random_uuid(),
+        'totalPrice', option->'price',
+        'specialInstructions', ''
+    );
+END
+$$;
+CREATE FUNCTION products."inventoryProductCartItemById"("productId" integer, "optionId" integer) RETURNS jsonb
+    LANGUAGE plpgsql STABLE
+    AS $$
+DECLARE
+    option jsonb;
+    product products."inventoryProduct";
+BEGIN
+    SELECT * FROM products."inventoryProduct" WHERE id = "productId" INTO product ;
+    SELECT json_build_object(
+        'id', id,
+        'price', CAST ("price"->0->>'value' AS numeric),
+        'discount', CAST ("price"->0->>'discount' AS numeric)
+    ) FROM "products"."inventoryProductOption" WHERE id = "optionId" into option;
+    RETURN json_build_object(
+        'id', product.id,
+        'name', product.name,
+        'type', 'inventoryProduct',
+        'image', product."assets"->'images'->0,
+        'option', option,
+        'discount', option->'discount',
+        'quantity', 1,
+        'unitPrice', option->'price',
+        'cartItemId', gen_random_uuid(),
+        'totalPrice', option->'price',
+        'specialInstructions', ''
+    );
+END
+$$;
+CREATE FUNCTION products."inventoryProductNutrition"(product products."inventoryProduct") RETURNS jsonb
+    LANGUAGE plpgsql STABLE
+    AS $$
+DECLARE
+    data jsonb;
+BEGIN
+    IF product."supplierItemId" IS NOT NULL THEN
+        SELECT "nutritionInfo" FROM inventory."bulkItem" WHERE id = (SELECT "bulkItemAsShippedId" FROM inventory."supplierItem" WHERE id = product."supplierItemId") INTO data;
+    ELSE
+        SELECT "nutritionInfo" FROM inventory."bulkItem" WHERE id = (SELECT "bulkItemId" FROM inventory."sachetItem" WHERE id = product."sachetItemId") INTO data;
+    END IF;
+    RETURN data;
+END;
+$$;
 CREATE TABLE products."inventoryProductOption" (
     id integer NOT NULL,
     quantity integer NOT NULL,
@@ -3012,7 +3272,11 @@ CREATE TABLE products."inventoryProductOption" (
     "assemblyStationId" integer,
     "labelTemplateId" integer,
     "packagingId" integer,
-    "instructionCardTemplateId" integer
+    "instructionCardTemplateId" integer,
+    "operationConfigId" integer NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE FUNCTION products."inventoryProductOptionFullName"(option products."inventoryProductOption") RETURNS text
     LANGUAGE plpgsql STABLE
@@ -3028,66 +3292,97 @@ CREATE FUNCTION products."isSimpleRecipeProductValid"(product products."simpleRe
     LANGUAGE plpgsql STABLE
     AS $$
 DECLARE
+    res json;
     temp json;
     isRecipeValid boolean;
 BEGIN
     IF product."simpleRecipeId" IS NULL
-        THEN return json_build_object('status', false, 'error', 'Recipe not provided');
+        THEN res := json_build_object('status', false, 'error', 'Recipe not provided');
     END IF;
     SELECT "simpleRecipe".isSimpleRecipeValid("simpleRecipe".*) FROM "simpleRecipe"."simpleRecipe" where "simpleRecipe".id = product."simpleRecipeId" into temp;
     SELECT temp->'status' into isRecipeValid;
     IF NOT isRecipeValid
-        THEN return json_build_object('status', false, 'error', 'Recipe is invalid');
+        THEN res := json_build_object('status', false, 'error', 'Recipe is invalid');
     ELSIF product."default" IS NULL
-        THEN return json_build_object('status', false, 'error', 'Default option not provided');
+        THEN res := json_build_object('status', false, 'error', 'Default option not provided');
     ELSE
-        return json_build_object('status', true, 'error', '');
+        res := json_build_object('status', true, 'error', '');
     END IF;
+    IF (res->>'status')::boolean = false AND product."isPublished" = true
+        THEN PERFORM products."unpublishProduct"('simpleRecipeProduct', product.id);
+    END IF;
+    RETURN res;
 END
 $$;
 CREATE FUNCTION products.iscomboproductvalid(product products."comboProduct") RETURNS jsonb
     LANGUAGE plpgsql STABLE
     AS $$
 DECLARE
+    res json;
     temp int;
 BEGIN
     SELECT COUNT(*) FROM "products"."comboProductComponent" where "comboProductComponent"."comboProductId" = product.id into temp;
     IF temp < 2
-        THEN return json_build_object('status', false, 'error', 'Atleast 2 options required');
+        THEN res := json_build_object('status', false, 'error', 'Atleast 2 options required');
     ELSE
-        return json_build_object('status', true, 'error', '');
+        res := json_build_object('status', true, 'error', '');
     END IF;
+    IF (res->>'status')::boolean = false AND product."isPublished" = true
+        THEN PERFORM products."unpublishProduct"('comboProduct', product.id);
+    END IF;
+    RETURN res;
 END
 $$;
 CREATE FUNCTION products.iscustomizableproductvalid(product products."customizableProduct") RETURNS jsonb
     LANGUAGE plpgsql STABLE
     AS $$
 DECLARE
+    res json;
     temp json;
 BEGIN
     SELECT id FROM "products"."customizableProductOption" where "customizableProductOption"."customizableProductId" = product.id LIMIT 1 into temp;
     IF temp IS NULL
-        THEN return json_build_object('status', false, 'error', 'No options provided');
+        THEN res := json_build_object('status', false, 'error', 'No options provided');
     ELSIF product."default" IS NULL
-        THEN return json_build_object('status', false, 'error', 'Default option not provided');
+        THEN res := json_build_object('status', false, 'error', 'Default option not provided');
     ELSE
-        return json_build_object('status', true, 'error', '');
+        res := json_build_object('status', true, 'error', '');
     END IF;
+    IF (res->>'status')::boolean = false AND product."isPublished" = true
+        THEN PERFORM products."unpublishProduct"('customizableProduct', product.id);
+    END IF;
+    RETURN res;
 END
 $$;
 CREATE FUNCTION products.isinventoryproductvalid(product products."inventoryProduct") RETURNS jsonb
     LANGUAGE plpgsql STABLE
     AS $$
 DECLARE
+    res json;
 BEGIN
     IF product."supplierItemId" IS NULL AND product."sachetItemId" IS NULL
-        THEN return json_build_object('status', false, 'error', 'Item not provided');
+        THEN res := json_build_object('status', false, 'error', 'Item not provided');
     ELSIF product."default" IS NULL
-        THEN return json_build_object('status', false, 'error', 'Default option not provided');
+        THEN res := json_build_object('status', false, 'error', 'Default option not provided');
     ELSE
-        return json_build_object('status', true, 'error', '');
+        res := json_build_object('status', true, 'error', '');
     END IF;
+    IF (res->>'status')::boolean = false AND product."isPublished" = true
+        THEN PERFORM products."unpublishProduct"('inventoryProduct', product.id);
+    END IF;
+    RETURN res;
 END
+$$;
+CREATE FUNCTION products.set_current_timestamp_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  _new record;
+BEGIN
+  _new := NEW;
+  _new."updated_at" = NOW();
+  RETURN _new;
+END;
 $$;
 CREATE FUNCTION products."simpleRecipeProductCartItem"(product products."simpleRecipeProduct", "optionId" integer) RETURNS jsonb
     LANGUAGE plpgsql STABLE
@@ -3156,7 +3451,11 @@ CREATE TABLE products."simpleRecipeProductOption" (
     "assemblyStationId" integer,
     "labelTemplateId" integer,
     "packagingId" integer,
-    "instructionCardTemplateId" integer
+    "instructionCardTemplateId" integer,
+    "operationConfigId" integer NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE FUNCTION products."simpleRecipeProductOptionFullName"(option products."simpleRecipeProductOption") RETURNS text
     LANGUAGE plpgsql STABLE
@@ -3176,6 +3475,16 @@ BEGIN
     RETURN res || ' (' || serving || ' servings)';
 END;
 $$;
+CREATE FUNCTION products."unpublishProduct"(producttype text, productid integer) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    query text;
+BEGIN
+    query := 'UPDATE products.' || '"' || productType || '"' || ' SET "isPublished" = false WHERE id = ' || productId;
+    EXECUTE query;
+END
+$$;
 CREATE FUNCTION rules."assertFact"(condition jsonb, params jsonb) RETURNS boolean
     LANGUAGE plpgsql STABLE
     AS $$
@@ -3192,77 +3501,74 @@ BEGIN
    RETURN res;
 END;
 $$;
-CREATE FUNCTION rules."budgetFunc"(params jsonb) RETURNS jsonb
-    LANGUAGE plpgsql STABLE
-    AS $_$
-DECLARE
-    recordData record;
-    resArray int array DEFAULT '{}';
-    res int;
-    endDate timestamp := current_timestamp;
-    startDate timestamp := endDate - (params->>'duration')::interval;
-    operators text[] := ARRAY['equal', 'greaterThan', 'greaterThanInclusive', 'lessThan', 'lessThanInclusive'];
-BEGIN
-    IF params->'read'
-        THEN RETURN jsonb_build_object('id', 'budget', 'fact', 'budget', 'title', 'Budget', 'value', '{ "type" : "select", "select" : "id", "datapoint" : "query", "query" : "{ comboProducts { id title: name } }" }'::json, 'argument','couponId', 'operators', operators);
-    END IF;
-    IF (params->>'Per Customer')::boolean = true THEN
-    FOR recordData IN 
-        EXECUTE 'SELECT * FROM crm."rewardHistory" WHERE $1 IS NOT NULL AND "keycloakId" = $2'
-        USING (params->>'Reward Type')::text, (params->>'keycloakId')::text
-    LOOP
-        resArray = resArray || recordData."id";
-    END LOOP;
-        RETURN jsonb_build_object('value', resArray);
-    ELSE
-        EXECUTE 'SELECT id FROM crm."rewardHistory" WHERE $1 IS NOT NULL'
-        INTO res
-        USING params->'Reward Type';
-        RETURN jsonb_build_object('value', res);
-    END IF;
-END;
-$_$;
-CREATE FUNCTION rules."budgetFunc2"(params jsonb) RETURNS jsonb
-    LANGUAGE plpgsql STABLE
-    AS $$
-DECLARE
-    recordData record;
-    resArray int array DEFAULT '{}';
-    res int;
-    endDate timestamp := current_timestamp;
-    startDate timestamp := endDate - (params->>'duration')::interval;
-    operators text[] := ARRAY['equal', 'greaterThan', 'greaterThanInclusive', 'lessThan', 'lessThanInclusive'];
-BEGIN
-        SELECT "id" FROM crm."rewardHistory" WHERE (params->>'Reward Type')::text IS NOT NULL AND "keycloakId" = (params->>'keycloakId')::text
-        INTO res;
-        resArray = resArray || res;
-        -- USING (params->>'Reward Type')::text, (params->>'keycloakId')::text;
-        RETURN jsonb_build_object('value', resArray);
-END;
-$$;
-CREATE FUNCTION rules."budgetTestFunc"(params jsonb) RETURNS jsonb
-    LANGUAGE plpgsql STABLE
-    AS $$
-DECLARE
-    queryParams jsonb not null default '{}'::jsonb ;
-    endDate timestamp := current_timestamp;
-    startDate timestamp := endDate - (params->>'duration')::interval;
-    operators text[] := ARRAY['equal', 'greaterThan', 'greaterThanInclusive', 'lessThan', 'lessThanInclusive'];
-BEGIN
-    IF params->'read'
-        THEN RETURN jsonb_build_object('id', 'budget', 'fact', 'budget', 'title', 'Budget', 'value', '{ "type" : "select", "select" : "id", "datapoint" : "query", "query" : "{ comboProducts { id title: name } }" }'::json, 'argument','couponId', 'operators', operators);
-    END IF;
-    IF params->>'rewardType' = 'discount'
-        THEN queryParams :=  queryParams || '{"columnName": "(params->>''rewardType'')"}';
-         queryParams :=  queryParams || '{"columnName2": "loyaltyPoints"}';
-        RETURN jsonb_build_object('value', queryParams);
-    END IF;
-END;
-$$;
 CREATE TABLE rules.facts (
     id integer NOT NULL,
     query text
 );
+CREATE FUNCTION rules.budget(fact rules.facts, params jsonb) RETURNS jsonb
+    LANGUAGE plpgsql STABLE
+    AS $$
+DECLARE
+    result jsonb;
+BEGIN
+  SELECT rules."budgetFunc"(params) INTO result;
+  RETURN result;
+END;
+$$;
+CREATE FUNCTION rules."budgetFunc"(params jsonb) RETURNS jsonb
+    LANGUAGE plpgsql STABLE
+    AS $$
+DECLARE
+    typeof text ;
+    total numeric := 0;
+    campaignRecord record;
+    campIds integer array DEFAULT '{}';
+    queryParams jsonb default '{}'::jsonb ;
+    endDate timestamp without time zone;
+    startDate timestamp without time zone ;
+    operators text[] := ARRAY['equal', 'greaterThan', 'greaterThanInclusive', 'lessThan', 'lessThanInclusive'];
+    query text :='';
+BEGIN
+    IF params->'read'
+        THEN RETURN jsonb_build_object('id', 'budget', 'fact', 'budget', 'title', 'Budget', 'value', '{ "type" : "select", "select" : "id", "datapoint" : "query", "query" : "{ comboProducts { id title: name } }" }'::json, 'argument','couponId', 'operators', operators);
+    END IF;
+    query := query || 'SELECT ' || (params->>'type')::text || '(' || '"'|| (params->>'rewardType')::text || '"' || ')' || ' FROM crm."rewardHistory" WHERE ';
+    IF (params->'perCustomer')::boolean = true THEN
+        query := query || '"keycloakId" = ' || '''' || (params->>'keycloakId')::text|| '''' || ' AND ';
+    END IF;
+    IF params->>'coverage' = 'Only This' THEN
+        IF params->>'couponId' IS NOT NULL THEN
+            query := query || ' "couponId" = ' || (params->>'couponId')::text ||'AND';
+        ELSIF params->>'campaignId' IS NOT NULL THEN    
+            query := query || ' "campaignId" = ' || (params->>'campaignId')::text||'AND';
+        ELSE
+            query := query; 
+        END IF;
+     ELSEIF params->>'coverage'='Sign Up' OR params->>'coverage'='Post Order' OR params->>'coverage'='Referral' THEN
+        FOR campaignRecord IN
+            SELECT * FROM crm."campaign" WHERE "type" = (params->>'coverage')::text 
+        LOOP
+            campIds := campIds || (campaignRecord."id")::int;
+        END LOOP;
+            query := query || ' "campaignId" IN ' || '(' || array_to_string(campIds, ',') || ')'  ||'AND';
+    ELSEIF params->>'coverage' = 'coupons' THEN
+        query := query || ' "couponId" IS NOT NULL AND'; 
+    ELSEIF params->>'coverage' = 'campaigns' THEN
+        query := query || ' "campaignId" IS NOT NULL AND';
+    ELSE
+        query := query;
+    END IF;
+    IF (params->>'duration')::interval IS NOT NULL THEN
+        endDate := now()::timestamp without time zone;
+        startDate := endDate - (params->>'duration')::interval;
+        query := query || ' "created_at" > ' || '''' || startDate || '''' || 'AND "created_at" < ' || '''' || endDate::timestamp without time zone ||'''' ;
+    ELSE
+        query :=query;
+    END IF;
+    EXECUTE query INTO total;
+    RETURN jsonb_build_object((params->>'type')::text, total, 'query', query);
+END;
+$$;
 CREATE FUNCTION rules."cartComboProduct"(fact rules.facts, params jsonb) RETURNS jsonb
     LANGUAGE plpgsql STABLE
     AS $$
@@ -4837,11 +5143,50 @@ BEGIN
     END IF;
 END
 $$;
+CREATE FUNCTION "simpleRecipe".set_current_timestamp_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  _new record;
+BEGIN
+  _new := NEW;
+  _new."updated_at" = NOW();
+  RETURN _new;
+END;
+$$;
 CREATE TABLE "simpleRecipe"."simpleRecipeYield" (
     id integer NOT NULL,
     "simpleRecipeId" integer NOT NULL,
-    yield jsonb NOT NULL
+    yield jsonb NOT NULL,
+    "isArchived" boolean DEFAULT false NOT NULL
 );
+CREATE FUNCTION "simpleRecipe"."yieldAllergens"(yield "simpleRecipe"."simpleRecipeYield") RETURNS jsonb
+    LANGUAGE plpgsql STABLE
+    AS $$
+DECLARE
+    arr jsonb;
+    temp jsonb;
+    data jsonb := '[]';
+    mode record;
+BEGIN
+    FOR mode IN SELECT * FROM ingredient."modeOfFulfillment" WHERE "ingredientSachetId" = ANY(SELECT "ingredientSachetId" FROM "simpleRecipe"."simpleRecipeYield_ingredientSachet" WHERE "recipeYieldId" = yield.id) LOOP
+        IF mode."bulkItemId" IS NOT NULL THEN
+            SELECT allergens FROM inventory."bulkItem" WHERE id = mode."bulkItemId" INTO arr;
+            FOR temp IN SELECT * FROM jsonb_array_elements(arr) LOOP
+                data := data || temp;
+            END LOOP;
+        ELSIF mode."sachetItemId" IS NOT NULL THEN
+            SELECT allergens FROM inventory."bulkItem" WHERE id = (SELECT "bulkItemId" FROM inventory."sachetItem" WHERE id = mode."sachetItemId") INTO arr;
+            FOR temp IN SELECT * FROM jsonb_array_elements(arr) LOOP
+                data := data || temp;
+            END LOOP;
+        ELSE
+            CONTINUE;
+        END IF;
+    END LOOP;
+    RETURN data;
+END;
+$$;
 CREATE FUNCTION "simpleRecipe"."yieldCost"(yield "simpleRecipe"."simpleRecipeYield") RETURNS jsonb
     LANGUAGE plpgsql STABLE
     AS $$
@@ -4930,8 +5275,8 @@ $$;
 CREATE TABLE subscription."subscriptionOccurence_product" (
     "subscriptionOccurenceId" integer,
     "productSku" uuid,
-    "simpleRecipeProductOptionId" integer NOT NULL,
-    "simpleRecipeProductId" integer NOT NULL,
+    "simpleRecipeProductOptionId" integer NULL,
+    "simpleRecipeProductId" integer NULL,
     "addonPrice" numeric,
     "addonLabel" text,
     "productCategory" text,
@@ -4941,19 +5286,33 @@ CREATE TABLE subscription."subscriptionOccurence_product" (
     "subscriptionId" integer,
     id integer NOT NULL,
     created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
+    updated_at timestamp with time zone DEFAULT now(),
+    "inventoryProductId" integer NULL,
+    "inventoryProductOptionId" integer NULL
 );
 CREATE FUNCTION subscription."cartItem"(x subscription."subscriptionOccurence_product") RETURNS jsonb
     LANGUAGE plpgsql STABLE
     AS $$
 DECLARE
     item jsonb;
+    productType text;
     productId int;
     optionId int;
 BEGIN
-    SELECT x."simpleRecipeProductId" into productId;
-    SELECT x."simpleRecipeProductOptionId" into optionId;
-    SELECT products."simpleRecipeProductCartItemById"(productId, optionId) into item;
+    IF x."simpleRecipeProductId" IS NOT NULL THEN
+        productType := 'SRP';
+    ELSE
+        productType := 'IP';
+    END IF;
+    IF productType = 'SRP' THEN
+        SELECT x."simpleRecipeProductId" into productId;
+        SELECT x."simpleRecipeProductOptionId" into optionId;
+        SELECT products."simpleRecipeProductCartItemById"(productId, optionId) into item;
+    ELSE
+        SELECT x."inventoryProductId" into productId;
+        SELECT x."inventoryProductOptionId" into optionId;
+        SELECT products."inventoryProductCartItemById"(productId, optionId) into item;
+    END IF;
     RETURN item;
 END
 $$;
@@ -5035,6 +5394,12 @@ BEGIN
   RETURN _new;
 END;
 $$;
+CREATE CAST (jsonb AS _rrule.rrule) WITH FUNCTION _rrule.jsonb_to_rrule(jsonb) AS IMPLICIT;
+CREATE CAST (jsonb AS _rrule.rruleset) WITH FUNCTION _rrule.jsonb_to_rruleset(jsonb) AS IMPLICIT;
+CREATE CAST (_rrule.rrule AS jsonb) WITH FUNCTION _rrule.rrule_to_jsonb(_rrule.rrule) AS IMPLICIT;
+CREATE CAST (text AS _rrule.rrule) WITH FUNCTION _rrule.rrule(text) AS IMPLICIT;
+CREATE CAST (text AS _rrule.rruleset) WITH FUNCTION _rrule.rruleset(text) AS IMPLICIT;
+CREATE CAST (timestamp without time zone AS _rrule.day) WITH FUNCTION _rrule.timestamp_to_day(timestamp without time zone) AS IMPLICIT;
 CREATE TABLE brands.brand (
     id integer NOT NULL,
     domain text,
@@ -5042,12 +5407,13 @@ CREATE TABLE brands.brand (
     title text,
     "isPublished" boolean DEFAULT true NOT NULL,
     "onDemandRequested" boolean DEFAULT false NOT NULL,
-    "subscriptionRequested" boolean DEFAULT false NOT NULL
+    "subscriptionRequested" boolean DEFAULT false NOT NULL,
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE TABLE brands."brand_storeSetting" (
     "brandId" integer NOT NULL,
     "storeSettingId" integer NOT NULL,
-    value jsonb
+    value jsonb NOT NULL
 );
 CREATE TABLE brands."brand_subscriptionStoreSetting" (
     "brandId" integer NOT NULL,
@@ -5065,7 +5431,7 @@ ALTER SEQUENCE brands.shop_id_seq OWNED BY brands.brand.id;
 CREATE TABLE brands."storeSetting" (
     id integer NOT NULL,
     identifier text NOT NULL,
-    value jsonb,
+    value jsonb NOT NULL,
     type text
 );
 CREATE SEQUENCE brands."storeSetting_id_seq"
@@ -5167,17 +5533,6 @@ CREATE TABLE crm.brand_coupon (
     "couponId" integer NOT NULL,
     "isActive" boolean DEFAULT true NOT NULL
 );
-CREATE TABLE crm.campaign (
-    id integer NOT NULL,
-    type text NOT NULL,
-    "metaDetails" jsonb,
-    "conditionId" integer,
-    "isRewardMulti" boolean DEFAULT false NOT NULL,
-    "isActive" boolean DEFAULT false NOT NULL,
-    priority integer DEFAULT 1 NOT NULL,
-    created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
-);
 CREATE TABLE crm."campaignType" (
     id integer NOT NULL,
     value text NOT NULL
@@ -5198,15 +5553,6 @@ CREATE SEQUENCE crm.campaign_id_seq
     NO MAXVALUE
     CACHE 1;
 ALTER SEQUENCE crm.campaign_id_seq OWNED BY crm.campaign.id;
-CREATE TABLE crm.coupon (
-    id integer NOT NULL,
-    "isActive" boolean DEFAULT false NOT NULL,
-    "metaDetails" jsonb,
-    code text NOT NULL,
-    "isRewardMulti" boolean DEFAULT false NOT NULL,
-    "visibleConditionId" integer,
-    "isVoucher" boolean DEFAULT false NOT NULL
-);
 CREATE SEQUENCE crm.coupon_id_seq
     AS integer
     START WITH 1
@@ -5228,7 +5574,8 @@ CREATE TABLE crm.customer (
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
     "isTest" boolean DEFAULT false NOT NULL,
-    "sourceBrandId" integer DEFAULT 1 NOT NULL
+    "sourceBrandId" integer DEFAULT 1 NOT NULL,
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE TABLE crm."customerReferral" (
     id integer NOT NULL,
@@ -5366,8 +5713,36 @@ CREATE TABLE crm."rewardHistory" (
     "loyaltyPointTransactionId" integer,
     "loyaltyPoints" integer,
     "walletAmount" numeric,
-    "walletTransactionId" integer
+    "walletTransactionId" integer,
+    "brandId" integer DEFAULT 1 NOT NULL
 );
+CREATE VIEW crm."rewardHistoryView" AS
+ SELECT "rewardHistory".id,
+    date_part('hour'::text, "rewardHistory".created_at) AS rewardhour,
+    date_part('month'::text, "rewardHistory".created_at) AS rewardmonth,
+    date("rewardHistory".created_at) AS rewarddate,
+    date_part('dow'::text, "rewardHistory".created_at) AS rewardday
+   FROM crm."rewardHistory";
+CREATE VIEW crm."rewardHistoryView2" AS
+ SELECT "rewardHistory".id,
+    "rewardHistory"."rewardId",
+    "rewardHistory".created_at,
+    "rewardHistory".updated_at,
+    "rewardHistory"."couponId",
+    "rewardHistory"."campaignId",
+    "rewardHistory"."keycloakId",
+    "rewardHistory"."orderCartId",
+    "rewardHistory"."orderId",
+    "rewardHistory".discount,
+    "rewardHistory"."loyaltyPointTransactionId",
+    "rewardHistory"."loyaltyPoints",
+    "rewardHistory"."walletAmount",
+    "rewardHistory"."walletTransactionId",
+    date_part('hour'::text, "rewardHistory".created_at) AS rewardhour,
+    date_part('month'::text, "rewardHistory".created_at) AS rewardmonth,
+    date("rewardHistory".created_at) AS rewarddate,
+    date_part('dow'::text, "rewardHistory".created_at) AS rewardday
+   FROM crm."rewardHistory";
 CREATE SEQUENCE crm."rewardHistory_id_seq"
     AS integer
     START WITH 1
@@ -5653,7 +6028,10 @@ CREATE TABLE ingredient."ingredientProcessing" (
     "processingName" text NOT NULL,
     "ingredientId" integer NOT NULL,
     "nutritionalInfo" jsonb,
-    cost jsonb
+    cost jsonb,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE SEQUENCE ingredient."ingredientProcessing_id_seq"
     AS integer
@@ -5691,26 +6069,17 @@ CREATE SEQUENCE ingredient."modeOfFulfillment_id_seq"
     NO MAXVALUE
     CACHE 1;
 ALTER SEQUENCE ingredient."modeOfFulfillment_id_seq" OWNED BY ingredient."modeOfFulfillment".id;
+CREATE TABLE insights.app_module_insight (
+    "appTitle" text NOT NULL,
+    "moduleTitle" text NOT NULL,
+    "insightIdentifier" text NOT NULL
+);
 CREATE TABLE insights.chart (
     id integer NOT NULL,
     "layoutType" text DEFAULT 'HERO'::text,
     config jsonb,
-    "insisghtsTitle" text NOT NULL
+    "insightIdentifier" text NOT NULL
 );
-CREATE TABLE insights."chartOption" (
-    id integer NOT NULL,
-    "chartId" integer NOT NULL,
-    "propertyLabel" text NOT NULL,
-    "defaultValue" text NOT NULL
-);
-CREATE SEQUENCE insights."chartOption_id_seq"
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-ALTER SEQUENCE insights."chartOption_id_seq" OWNED BY insights."chartOption".id;
 CREATE SEQUENCE insights.chart_id_seq
     AS integer
     START WITH 1
@@ -5724,7 +6093,8 @@ CREATE TABLE insights.date (
     day text
 );
 CREATE TABLE insights.day (
-    "dayName" text NOT NULL
+    "dayName" text NOT NULL,
+    "dayNumber" integer
 );
 CREATE TABLE insights.hour (
     hour integer NOT NULL
@@ -5735,11 +6105,13 @@ CREATE TABLE insights.insights (
     switches jsonb NOT NULL,
     "isActive" boolean DEFAULT false,
     "defaultOptions" jsonb,
-    title text NOT NULL,
+    identifier text NOT NULL,
     description text,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
-    filters jsonb
+    filters jsonb,
+    config jsonb,
+    "schemaVariables" jsonb
 );
 COMMENT ON COLUMN insights.insights.filters IS 'same as availableOptions, will be used to render individual options like date range in insights.';
 CREATE TABLE "order"."orderInventoryProduct" (
@@ -5835,6 +6207,42 @@ CREATE VIEW insights.simple_recipe_sale_ready_to_eat AS
     count("orderReadyToEatProduct"."simpleRecipeId") AS count
    FROM "order"."orderReadyToEatProduct"
   GROUP BY "orderReadyToEatProduct"."simpleRecipeId";
+CREATE VIEW insights.test AS
+ SELECT customer.id,
+    customer.source,
+    customer.email,
+    customer."keycloakId",
+    customer."clientId",
+    customer."isSubscriber",
+    customer."subscriptionId",
+    customer."subscriptionAddressId",
+    customer."subscriptionPaymentMethodId",
+    customer.created_at,
+    customer.updated_at,
+    customer."isTest",
+    customer."sourceBrandId",
+    customer."isArchived"
+   FROM crm.customer;
+CREATE VIEW insights.test1 AS
+ SELECT customer.source
+   FROM crm.customer;
+CREATE VIEW insights.test2 AS
+ SELECT customer.source AS xyz
+   FROM crm.customer;
+CREATE VIEW insights.test3 AS
+ SELECT count(customer.id) AS xyz
+   FROM crm.customer
+  GROUP BY customer.source;
+CREATE VIEW insights.test4 AS
+ SELECT count(customer.id) AS xyz,
+    customer.source
+   FROM crm.customer
+  GROUP BY customer.source;
+CREATE VIEW insights.test5 AS
+ SELECT count(customer.id) AS count,
+    customer.source
+   FROM crm.customer
+  GROUP BY customer.source;
 CREATE TABLE inventory."bulkItemHistory" (
     id integer NOT NULL,
     "bulkItemId" integer NOT NULL,
@@ -5880,7 +6288,8 @@ CREATE TABLE inventory."bulkItem" (
     committed numeric DEFAULT 0 NOT NULL,
     awaiting numeric DEFAULT 0 NOT NULL,
     consumed numeric DEFAULT 0 NOT NULL,
-    "isAvailable" boolean DEFAULT true NOT NULL
+    "isAvailable" boolean DEFAULT true NOT NULL,
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE SEQUENCE inventory."bulkInventoryItem_id_seq"
     AS integer
@@ -5937,7 +6346,7 @@ CREATE TABLE inventory."purchaseOrderItem" (
     "bulkItemId" integer,
     "supplierItemId" integer,
     "orderQuantity" numeric DEFAULT 0,
-    status text DEFAULT 'PENDING'::text NOT NULL,
+    status text DEFAULT 'UNPUBLISHED'::text NOT NULL,
     details jsonb,
     unit text,
     "supplierId" integer,
@@ -5995,7 +6404,8 @@ CREATE TABLE inventory."sachetItem" (
     unit text NOT NULL,
     consumed numeric DEFAULT 0 NOT NULL,
     awaiting numeric DEFAULT 0 NOT NULL,
-    committed numeric DEFAULT 0 NOT NULL
+    committed numeric DEFAULT 0 NOT NULL,
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE SEQUENCE inventory."sachetItem2_id_seq"
     AS integer
@@ -6016,7 +6426,7 @@ CREATE TABLE inventory."sachetWorkOrder" (
     "stationId" integer,
     "userId" integer,
     "scheduledOn" timestamp with time zone,
-    status text,
+    status text DEFAULT 'UNPUBLISHED'::text,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
     name text,
@@ -6054,7 +6464,8 @@ CREATE TABLE inventory."supplierItem" (
     certificates jsonb,
     "bulkItemAsShippedId" integer,
     sku text,
-    "importId" integer
+    "importId" integer,
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE SEQUENCE inventory."supplierItem_id_seq"
     AS integer
@@ -6241,7 +6652,9 @@ CREATE VIEW "onDemand"."collectionDetails" AS
     collection."endTime",
     collection.rrule,
     "onDemand"."numberOfCategories"(collection.id) AS "categoriesCount",
-    "onDemand"."numberOfProducts"(collection.id) AS "productsCount"
+    "onDemand"."numberOfProducts"(collection.id) AS "productsCount",
+    collection.created_at,
+    collection.updated_at
    FROM "onDemand".collection;
 CREATE SEQUENCE "onDemand".collection_id_seq
     AS integer
@@ -6447,7 +6860,10 @@ CREATE TABLE products."comboProductComponent" (
     "customizableProductId" integer,
     label text NOT NULL,
     "comboProductId" integer NOT NULL,
-    discount numeric
+    discount numeric,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE SEQUENCE products."comboProductComponents_id_seq"
     AS integer
@@ -6596,6 +7012,10 @@ CREATE SEQUENCE settings."appSettings_id_seq"
     NO MAXVALUE
     CACHE 1;
 ALTER SEQUENCE settings."appSettings_id_seq" OWNED BY settings."appSettings".id;
+CREATE TABLE settings.app_module (
+    "appTitle" text NOT NULL,
+    "moduleTitle" text NOT NULL
+);
 CREATE SEQUENCE settings.apps_id_seq
     AS integer
     START WITH 1
@@ -6658,7 +7078,8 @@ CREATE TABLE settings.station (
     name text NOT NULL,
     "defaultLabelPrinterId" integer,
     "defaultKotPrinterId" integer,
-    "defaultScaleId" integer
+    "defaultScaleId" integer,
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE SEQUENCE settings.station_id_seq
     AS integer
@@ -6728,7 +7149,8 @@ CREATE TABLE "simpleRecipe"."simpleRecipeYield_ingredientSachet" (
     "ingredientSachetId" integer NOT NULL,
     "isVisible" boolean DEFAULT true NOT NULL,
     "slipName" text,
-    "isSachetValid" boolean
+    "isSachetValid" boolean,
+    "isArchived" boolean DEFAULT false NOT NULL
 );
 CREATE SEQUENCE "simpleRecipe"."simpleRecipe_id_seq"
     AS integer
@@ -6854,7 +7276,6 @@ ALTER TABLE ONLY ingredient."ingredientProcessing" ALTER COLUMN id SET DEFAULT n
 ALTER TABLE ONLY ingredient."ingredientSachet" ALTER COLUMN id SET DEFAULT nextval('ingredient."ingredientSachet_id_seq"'::regclass);
 ALTER TABLE ONLY ingredient."modeOfFulfillment" ALTER COLUMN id SET DEFAULT nextval('ingredient."modeOfFulfillment_id_seq"'::regclass);
 ALTER TABLE ONLY insights.chart ALTER COLUMN id SET DEFAULT nextval('insights.chart_id_seq'::regclass);
-ALTER TABLE ONLY insights."chartOption" ALTER COLUMN id SET DEFAULT nextval('insights."chartOption_id_seq"'::regclass);
 ALTER TABLE ONLY inventory."bulkItem" ALTER COLUMN id SET DEFAULT nextval('inventory."bulkInventoryItem_id_seq"'::regclass);
 ALTER TABLE ONLY inventory."bulkItemHistory" ALTER COLUMN id SET DEFAULT nextval('inventory."bulkHistory_id_seq"'::regclass);
 ALTER TABLE ONLY inventory."bulkWorkOrder" ALTER COLUMN id SET DEFAULT nextval('inventory."bulkWorkOrder_id_seq"'::regclass);
@@ -7054,20 +7475,22 @@ ALTER TABLE ONLY ingredient."modeOfFulfillmentEnum"
     ADD CONSTRAINT "modeOfFulfillmentEnum_pkey" PRIMARY KEY (value);
 ALTER TABLE ONLY ingredient."modeOfFulfillment"
     ADD CONSTRAINT "modeOfFulfillment_pkey" PRIMARY KEY (id);
-ALTER TABLE ONLY insights."chartOption"
-    ADD CONSTRAINT "chartOption_pkey" PRIMARY KEY (id);
+ALTER TABLE ONLY insights.app_module_insight
+    ADD CONSTRAINT app_module_insight_pkey PRIMARY KEY ("appTitle", "moduleTitle", "insightIdentifier");
 ALTER TABLE ONLY insights.chart
     ADD CONSTRAINT chart_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY insights.date
     ADD CONSTRAINT date_pkey PRIMARY KEY (date);
 ALTER TABLE ONLY insights.day
+    ADD CONSTRAINT "day_dayNumber_key" UNIQUE ("dayNumber");
+ALTER TABLE ONLY insights.day
     ADD CONSTRAINT day_pkey PRIMARY KEY ("dayName");
 ALTER TABLE ONLY insights.hour
     ADD CONSTRAINT hour_pkey PRIMARY KEY (hour);
 ALTER TABLE ONLY insights.insights
-    ADD CONSTRAINT insights_pkey PRIMARY KEY (title);
+    ADD CONSTRAINT insights_pkey PRIMARY KEY (identifier);
 ALTER TABLE ONLY insights.insights
-    ADD CONSTRAINT insights_title_key UNIQUE (title);
+    ADD CONSTRAINT insights_title_key UNIQUE (identifier);
 ALTER TABLE ONLY insights.month
     ADD CONSTRAINT month_name_key UNIQUE (name);
 ALTER TABLE ONLY insights.month
@@ -7224,6 +7647,8 @@ ALTER TABLE ONLY settings."appSettings"
     ADD CONSTRAINT "appSettings_identifier_key" UNIQUE (identifier);
 ALTER TABLE ONLY settings."appSettings"
     ADD CONSTRAINT "appSettings_pkey" PRIMARY KEY (id);
+ALTER TABLE ONLY settings.app_module
+    ADD CONSTRAINT app_module_pkey PRIMARY KEY ("appTitle", "moduleTitle");
 ALTER TABLE ONLY settings.app
     ADD CONSTRAINT apps_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY settings.app
@@ -7311,8 +7736,14 @@ CREATE TRIGGER "set_deviceHub_computer_updated_at" BEFORE UPDATE ON "deviceHub".
 COMMENT ON TRIGGER "set_deviceHub_computer_updated_at" ON "deviceHub".computer IS 'trigger to set value of column "updated_at" to current timestamp on row update';
 CREATE TRIGGER "set_fulfilment_deliveryPreferenceByCharge_updated_at" BEFORE UPDATE ON fulfilment."deliveryPreferenceByCharge" FOR EACH ROW EXECUTE FUNCTION fulfilment.set_current_timestamp_updated_at();
 COMMENT ON TRIGGER "set_fulfilment_deliveryPreferenceByCharge_updated_at" ON fulfilment."deliveryPreferenceByCharge" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
+CREATE TRIGGER "set_ingredient_ingredientProcessing_updated_at" BEFORE UPDATE ON ingredient."ingredientProcessing" FOR EACH ROW EXECUTE FUNCTION ingredient.set_current_timestamp_updated_at();
+COMMENT ON TRIGGER "set_ingredient_ingredientProcessing_updated_at" ON ingredient."ingredientProcessing" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
 CREATE TRIGGER "set_ingredient_ingredientSachet_updatedAt" BEFORE UPDATE ON ingredient."ingredientSachet" FOR EACH ROW EXECUTE FUNCTION ingredient."set_current_timestamp_updatedAt"();
 COMMENT ON TRIGGER "set_ingredient_ingredientSachet_updatedAt" ON ingredient."ingredientSachet" IS 'trigger to set value of column "updatedAt" to current timestamp on row update';
+CREATE TRIGGER set_ingredient_ingredient_updated_at BEFORE UPDATE ON ingredient.ingredient FOR EACH ROW EXECUTE FUNCTION ingredient.set_current_timestamp_updated_at();
+COMMENT ON TRIGGER set_ingredient_ingredient_updated_at ON ingredient.ingredient IS 'trigger to set value of column "updated_at" to current timestamp on row update';
+CREATE TRIGGER "set_ingredient_modeOfFulfillment_updated_at" BEFORE UPDATE ON ingredient."modeOfFulfillment" FOR EACH ROW EXECUTE FUNCTION ingredient.set_current_timestamp_updated_at();
+COMMENT ON TRIGGER "set_ingredient_modeOfFulfillment_updated_at" ON ingredient."modeOfFulfillment" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
 CREATE TRIGGER set_insights_insights_updated_at BEFORE UPDATE ON insights.insights FOR EACH ROW EXECUTE FUNCTION insights.set_current_timestamp_updated_at();
 COMMENT ON TRIGGER set_insights_insights_updated_at ON insights.insights IS 'trigger to set value of column "updated_at" to current timestamp on row update';
 CREATE TRIGGER "set_inventory_bulkItemHistory_updated_at" BEFORE UPDATE ON inventory."bulkItemHistory" FOR EACH ROW EXECUTE FUNCTION inventory.set_current_timestamp_updated_at();
@@ -7331,6 +7762,10 @@ CREATE TRIGGER set_notifications_notification_updated_at BEFORE UPDATE ON notifi
 COMMENT ON TRIGGER set_notifications_notification_updated_at ON notifications."displayNotification" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
 CREATE TRIGGER "set_notifications_printConfig_updated_at" BEFORE UPDATE ON notifications."printConfig" FOR EACH ROW EXECUTE FUNCTION notifications.set_current_timestamp_updated_at();
 COMMENT ON TRIGGER "set_notifications_printConfig_updated_at" ON notifications."printConfig" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
+CREATE TRIGGER "set_onDemand_collection_updated_at" BEFORE UPDATE ON "onDemand".collection FOR EACH ROW EXECUTE FUNCTION "onDemand".set_current_timestamp_updated_at();
+COMMENT ON TRIGGER "set_onDemand_collection_updated_at" ON "onDemand".collection IS 'trigger to set value of column "updated_at" to current timestamp on row update';
+CREATE TRIGGER "deductLoyaltyPointsPostOrder" AFTER INSERT ON "order"."order" FOR EACH ROW EXECUTE FUNCTION crm."deductLoyaltyPointsPostOrder"();
+CREATE TRIGGER "deductWalletAmountPostOrder" AFTER INSERT ON "order"."order" FOR EACH ROW EXECUTE FUNCTION crm."deductWalletAmountPostOrder"();
 CREATE TRIGGER orderassemblystatustrigger AFTER UPDATE OF "assemblyStatus", "isAssembled" ON "order"."orderInventoryProduct" FOR EACH ROW EXECUTE FUNCTION "order".check_main_order_status_trigger();
 CREATE TRIGGER orderassemblystatustrigger AFTER UPDATE OF "assemblyStatus", "isAssembled" ON "order"."orderMealKitProduct" FOR EACH ROW EXECUTE FUNCTION "order".check_main_order_status_trigger();
 CREATE TRIGGER orderassemblystatustrigger AFTER UPDATE OF "assemblyStatus", "isAssembled" ON "order"."orderReadyToEatProduct" FOR EACH ROW EXECUTE FUNCTION "order".check_main_order_status_trigger();
@@ -7342,6 +7777,22 @@ COMMENT ON TRIGGER set_order_order_updated_at ON "order"."order" IS 'trigger to 
 CREATE TRIGGER update_mealk_sachet_status AFTER UPDATE ON "order"."orderMealKitProduct" FOR EACH ROW EXECUTE FUNCTION "order".update_mealkit_sachet_status();
 CREATE TRIGGER update_readytoeat_sachet_status AFTER UPDATE ON "order"."orderReadyToEatProduct" FOR EACH ROW EXECUTE FUNCTION "order".update_readytoeat_sachet_status();
 CREATE TRIGGER updateorderproductsstatus AFTER UPDATE OF "orderStatus" ON "order"."order" FOR EACH ROW EXECUTE FUNCTION "order".update_order_products_status();
+CREATE TRIGGER "set_products_comboProductComponent_updated_at" BEFORE UPDATE ON products."comboProductComponent" FOR EACH ROW EXECUTE FUNCTION products.set_current_timestamp_updated_at();
+COMMENT ON TRIGGER "set_products_comboProductComponent_updated_at" ON products."comboProductComponent" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
+CREATE TRIGGER "set_products_comboProduct_updated_at" BEFORE UPDATE ON products."comboProduct" FOR EACH ROW EXECUTE FUNCTION products.set_current_timestamp_updated_at();
+COMMENT ON TRIGGER "set_products_comboProduct_updated_at" ON products."comboProduct" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
+CREATE TRIGGER "set_products_customizableProductOption_updated_at" BEFORE UPDATE ON products."customizableProductOption" FOR EACH ROW EXECUTE FUNCTION products.set_current_timestamp_updated_at();
+COMMENT ON TRIGGER "set_products_customizableProductOption_updated_at" ON products."customizableProductOption" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
+CREATE TRIGGER "set_products_customizableProduct_updated_at" BEFORE UPDATE ON products."customizableProduct" FOR EACH ROW EXECUTE FUNCTION products.set_current_timestamp_updated_at();
+COMMENT ON TRIGGER "set_products_customizableProduct_updated_at" ON products."customizableProduct" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
+CREATE TRIGGER "set_products_inventoryProductOption_updated_at" BEFORE UPDATE ON products."inventoryProductOption" FOR EACH ROW EXECUTE FUNCTION products.set_current_timestamp_updated_at();
+COMMENT ON TRIGGER "set_products_inventoryProductOption_updated_at" ON products."inventoryProductOption" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
+CREATE TRIGGER "set_products_inventoryProduct_updated_at" BEFORE UPDATE ON products."inventoryProduct" FOR EACH ROW EXECUTE FUNCTION products.set_current_timestamp_updated_at();
+COMMENT ON TRIGGER "set_products_inventoryProduct_updated_at" ON products."inventoryProduct" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
+CREATE TRIGGER "set_products_simpleRecipeProductOption_updated_at" BEFORE UPDATE ON products."simpleRecipeProductOption" FOR EACH ROW EXECUTE FUNCTION products.set_current_timestamp_updated_at();
+COMMENT ON TRIGGER "set_products_simpleRecipeProductOption_updated_at" ON products."simpleRecipeProductOption" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
+CREATE TRIGGER "set_products_simpleRecipeProduct_updated_at" BEFORE UPDATE ON products."simpleRecipeProduct" FOR EACH ROW EXECUTE FUNCTION products.set_current_timestamp_updated_at();
+COMMENT ON TRIGGER "set_products_simpleRecipeProduct_updated_at" ON products."simpleRecipeProduct" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
 CREATE TRIGGER "set_safety_safetyCheck_updated_at" BEFORE UPDATE ON safety."safetyCheck" FOR EACH ROW EXECUTE FUNCTION safety.set_current_timestamp_updated_at();
 COMMENT ON TRIGGER "set_safety_safetyCheck_updated_at" ON safety."safetyCheck" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
 CREATE TRIGGER set_settings_apps_updated_at BEFORE UPDATE ON settings.app FOR EACH ROW EXECUTE FUNCTION settings.set_current_timestamp_updated_at();
@@ -7354,6 +7805,8 @@ CREATE TRIGGER set_settings_roles_updated_at BEFORE UPDATE ON settings.role FOR 
 COMMENT ON TRIGGER set_settings_roles_updated_at ON settings.role IS 'trigger to set value of column "updated_at" to current timestamp on row update';
 CREATE TRIGGER set_settings_user_role_updated_at BEFORE UPDATE ON settings.user_role FOR EACH ROW EXECUTE FUNCTION settings.set_current_timestamp_updated_at();
 COMMENT ON TRIGGER set_settings_user_role_updated_at ON settings.user_role IS 'trigger to set value of column "updated_at" to current timestamp on row update';
+CREATE TRIGGER "set_simpleRecipe_simpleRecipe_updated_at" BEFORE UPDATE ON "simpleRecipe"."simpleRecipe" FOR EACH ROW EXECUTE FUNCTION "simpleRecipe".set_current_timestamp_updated_at();
+COMMENT ON TRIGGER "set_simpleRecipe_simpleRecipe_updated_at" ON "simpleRecipe"."simpleRecipe" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
 CREATE TRIGGER "set_subscription_subscriptionOccurence_product_updated_at" BEFORE UPDATE ON subscription."subscriptionOccurence_product" FOR EACH ROW EXECUTE FUNCTION subscription.set_current_timestamp_updated_at();
 COMMENT ON TRIGGER "set_subscription_subscriptionOccurence_product_updated_at" ON subscription."subscriptionOccurence_product" IS 'trigger to set value of column "updated_at" to current timestamp on row update';
 CREATE TRIGGER "set_subscription_subscriptionTitle_updated_at" BEFORE UPDATE ON subscription."subscriptionTitle" FOR EACH ROW EXECUTE FUNCTION subscription.set_current_timestamp_updated_at();
@@ -7427,6 +7880,8 @@ ALTER TABLE ONLY crm."orderCart_rewards"
 ALTER TABLE ONLY crm."orderCart"
     ADD CONSTRAINT "orderCart_subscriptionOccurenceId_fkey" FOREIGN KEY ("subscriptionOccurenceId") REFERENCES subscription."subscriptionOccurence"(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY crm."rewardHistory"
+    ADD CONSTRAINT "rewardHistory_brandId_fkey" FOREIGN KEY ("brandId") REFERENCES brands.brand(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+ALTER TABLE ONLY crm."rewardHistory"
     ADD CONSTRAINT "rewardHistory_campaignId_fkey" FOREIGN KEY ("campaignId") REFERENCES crm.campaign(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY crm."rewardHistory"
     ADD CONSTRAINT "rewardHistory_couponId_fkey" FOREIGN KEY ("couponId") REFERENCES crm.coupon(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
@@ -7439,7 +7894,7 @@ ALTER TABLE ONLY crm."rewardHistory"
 ALTER TABLE ONLY crm."rewardHistory"
     ADD CONSTRAINT "rewardHistory_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "order"."order"(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY crm."rewardHistory"
-    ADD CONSTRAINT "rewardHistory_rewardId_fkey" FOREIGN KEY ("rewardId") REFERENCES crm.reward(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+    ADD CONSTRAINT "rewardHistory_rewardId_fkey" FOREIGN KEY ("rewardId") REFERENCES crm.reward(id) ON UPDATE CASCADE ON DELETE RESTRICT;
 ALTER TABLE ONLY crm."rewardHistory"
     ADD CONSTRAINT "rewardHistory_walletTransactionId_fkey" FOREIGN KEY ("walletTransactionId") REFERENCES crm."walletTransaction"(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY crm."rewardType_campaignType"
@@ -7509,6 +7964,8 @@ ALTER TABLE ONLY ingredient."modeOfFulfillment"
 ALTER TABLE ONLY ingredient."modeOfFulfillment"
     ADD CONSTRAINT "modeOfFulfillment_labelTemplateId_fkey" FOREIGN KEY ("labelTemplateId") REFERENCES "deviceHub"."labelTemplate"(id) ON UPDATE CASCADE ON DELETE SET NULL;
 ALTER TABLE ONLY ingredient."modeOfFulfillment"
+    ADD CONSTRAINT "modeOfFulfillment_operationalConfigId_fkey" FOREIGN KEY ("operationConfigId") REFERENCES settings."operationConfig"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+ALTER TABLE ONLY ingredient."modeOfFulfillment"
     ADD CONSTRAINT "modeOfFulfillment_packagingId_fkey" FOREIGN KEY ("packagingId") REFERENCES packaging.packaging(id) ON UPDATE CASCADE ON DELETE SET NULL;
 ALTER TABLE ONLY ingredient."modeOfFulfillment"
     ADD CONSTRAINT "modeOfFulfillment_sachetItemId_fkey" FOREIGN KEY ("sachetItemId") REFERENCES inventory."sachetItem"(id) ON UPDATE CASCADE ON DELETE SET NULL;
@@ -7516,10 +7973,10 @@ ALTER TABLE ONLY ingredient."modeOfFulfillment"
     ADD CONSTRAINT "modeOfFulfillment_stationId_fkey" FOREIGN KEY ("stationId") REFERENCES settings.station(id) ON UPDATE CASCADE ON DELETE SET NULL;
 ALTER TABLE ONLY ingredient."modeOfFulfillment"
     ADD CONSTRAINT "modeOfFulfillment_type_fkey" FOREIGN KEY (type) REFERENCES ingredient."modeOfFulfillmentEnum"(value) ON UPDATE CASCADE ON DELETE RESTRICT;
-ALTER TABLE ONLY insights."chartOption"
-    ADD CONSTRAINT "chartOption_chartId_fkey" FOREIGN KEY ("chartId") REFERENCES insights.chart(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+ALTER TABLE ONLY insights.app_module_insight
+    ADD CONSTRAINT "app_module_insight_insightIdentifier_fkey" FOREIGN KEY ("insightIdentifier") REFERENCES insights.insights(identifier) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY insights.chart
-    ADD CONSTRAINT "chart_insisghtsTitle_fkey" FOREIGN KEY ("insisghtsTitle") REFERENCES insights.insights(title) ON UPDATE RESTRICT ON DELETE RESTRICT;
+    ADD CONSTRAINT "chart_insisghtsTitle_fkey" FOREIGN KEY ("insightIdentifier") REFERENCES insights.insights(identifier) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY insights.date
     ADD CONSTRAINT date_day_fkey FOREIGN KEY (day) REFERENCES insights.day("dayName") ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY inventory."bulkItemHistory"
@@ -7739,7 +8196,7 @@ ALTER TABLE ONLY products."comboProduct"
 ALTER TABLE ONLY products."customizableProductOption"
     ADD CONSTRAINT "customizableProductOption_customizableProductId_fkey" FOREIGN KEY ("customizableProductId") REFERENCES products."customizableProduct"(id) ON UPDATE CASCADE ON DELETE CASCADE;
 ALTER TABLE ONLY products."customizableProductOption"
-    ADD CONSTRAINT "customizableProductOption_inventoryProductId_fkey" FOREIGN KEY ("inventoryProductId") REFERENCES products."inventoryProduct"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT "customizableProductOption_inventoryProductId_fkey" FOREIGN KEY ("inventoryProductId") REFERENCES products."inventoryProduct"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
 ALTER TABLE ONLY products."customizableProductOption"
     ADD CONSTRAINT "customizableProductOption_simpleRecipeProductId_fkey" FOREIGN KEY ("simpleRecipeProductId") REFERENCES products."simpleRecipeProduct"(id) ON UPDATE CASCADE ON DELETE CASCADE;
 ALTER TABLE ONLY products."customizableProduct"
@@ -7752,6 +8209,8 @@ ALTER TABLE ONLY products."inventoryProductOption"
     ADD CONSTRAINT "inventoryProductOption_labelTemplateId_fkey" FOREIGN KEY ("labelTemplateId") REFERENCES "deviceHub"."labelTemplate"(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY products."inventoryProductOption"
     ADD CONSTRAINT "inventoryProductOption_modifierId_fkey" FOREIGN KEY ("modifierId") REFERENCES "onDemand".modifier(id) ON UPDATE CASCADE ON DELETE SET NULL;
+ALTER TABLE ONLY products."inventoryProductOption"
+    ADD CONSTRAINT "inventoryProductOption_operationConfigId_fkey" FOREIGN KEY ("operationConfigId") REFERENCES settings."operationConfig"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
 ALTER TABLE ONLY products."inventoryProductOption"
     ADD CONSTRAINT "inventoryProductOption_packagingId_fkey" FOREIGN KEY ("packagingId") REFERENCES packaging.packaging(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY products."inventoryProductOption"
@@ -7771,6 +8230,8 @@ ALTER TABLE ONLY products."simpleRecipeProductOption"
 ALTER TABLE ONLY products."simpleRecipeProductOption"
     ADD CONSTRAINT "simpleRecipeProductOption_modifierId_fkey" FOREIGN KEY ("modifierId") REFERENCES "onDemand".modifier(id) ON UPDATE CASCADE ON DELETE SET NULL;
 ALTER TABLE ONLY products."simpleRecipeProductOption"
+    ADD CONSTRAINT "simpleRecipeProductOption_operationConfigId_fkey" FOREIGN KEY ("operationConfigId") REFERENCES settings."operationConfig"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+ALTER TABLE ONLY products."simpleRecipeProductOption"
     ADD CONSTRAINT "simpleRecipeProductOption_packagingId_fkey" FOREIGN KEY ("packagingId") REFERENCES packaging.packaging(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY products."simpleRecipeProductOption"
     ADD CONSTRAINT "simpleRecipeProductOption_simpleRecipeProductId_fkey" FOREIGN KEY ("simpleRecipeProductId") REFERENCES products."simpleRecipeProduct"(id) ON UPDATE CASCADE ON DELETE CASCADE;
@@ -7788,6 +8249,8 @@ ALTER TABLE ONLY safety."safetyCheckPerUser"
     ADD CONSTRAINT "safetyCheckByUser_userId_fkey" FOREIGN KEY ("userId") REFERENCES settings."user"(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY settings."appPermission"
     ADD CONSTRAINT "appPermission_appId_fkey" FOREIGN KEY ("appId") REFERENCES settings.app(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+ALTER TABLE ONLY settings.app_module
+    ADD CONSTRAINT "app_module_appTitle_fkey" FOREIGN KEY ("appTitle") REFERENCES settings.app(title) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY settings."operationConfig"
     ADD CONSTRAINT "operationConfig_labelTemplateId_fkey" FOREIGN KEY ("labelTemplateId") REFERENCES "deviceHub"."labelTemplate"(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY settings."operationConfig"
@@ -7819,7 +8282,7 @@ ALTER TABLE ONLY settings.station_user
 ALTER TABLE ONLY settings.user_role
     ADD CONSTRAINT "user_role_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES settings.role(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY settings.user_role
-    ADD CONSTRAINT "user_role_userId_fkey" FOREIGN KEY ("userId") REFERENCES settings."user"("keycloakId") ON UPDATE RESTRICT ON DELETE RESTRICT;
+    ADD CONSTRAINT "user_role_userId_fkey" FOREIGN KEY ("userId") REFERENCES settings."user"("keycloakId") ON UPDATE RESTRICT ON DELETE CASCADE;
 ALTER TABLE ONLY "simpleRecipe"."simpleRecipeYield_ingredientSachet"
     ADD CONSTRAINT "simpleRecipeYield_ingredientSachet_ingredientSachetId_fkey" FOREIGN KEY ("ingredientSachetId") REFERENCES ingredient."ingredientSachet"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
 ALTER TABLE ONLY "simpleRecipe"."simpleRecipeYield_ingredientSachet"
@@ -7838,6 +8301,10 @@ ALTER TABLE ONLY subscription."subscriptionOccurence_customer"
     ADD CONSTRAINT "subscriptionOccurence_customer_orderCartId_fkey" FOREIGN KEY ("orderCartId") REFERENCES crm."orderCart"(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY subscription."subscriptionOccurence_customer"
     ADD CONSTRAINT "subscriptionOccurence_customer_subscriptionOccurenceId_fkey" FOREIGN KEY ("subscriptionOccurenceId") REFERENCES subscription."subscriptionOccurence"(id) ON UPDATE SET NULL ON DELETE SET NULL;
+ALTER TABLE ONLY subscription."subscriptionOccurence_product"
+    ADD CONSTRAINT "subscriptionOccurence_product_inventoryProductId_fkey" FOREIGN KEY ("inventoryProductId") REFERENCES products."inventoryProduct"(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+ALTER TABLE ONLY subscription."subscriptionOccurence_product"
+    ADD CONSTRAINT "subscriptionOccurence_product_inventoryProductOptionId_fkey" FOREIGN KEY ("inventoryProductOptionId") REFERENCES products."inventoryProductOption"(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY subscription."subscriptionOccurence_product"
     ADD CONSTRAINT "subscriptionOccurence_product_productCategory_fkey" FOREIGN KEY ("productCategory") REFERENCES master."productCategory"(name) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE ONLY subscription."subscriptionOccurence_product"

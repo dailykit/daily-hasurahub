@@ -28,13 +28,20 @@
         table:
           schema: crm
           name: brand_coupon
-  - name: brand_paymentPartnerships
+  - name: brand_customers
     using:
       foreign_key_constraint_on:
         column: brandId
         table:
-          schema: brands
-          name: brand_paymentPartnership
+          schema: crm
+          name: brand_customer
+  - name: brand_Orders
+    using:
+      foreign_key_constraint_on:
+        column: brandId
+        table:
+          schema: order
+          name: order
   - name: collections
     using:
       foreign_key_constraint_on:
@@ -70,25 +77,6 @@
         table:
           schema: subscription
           name: brand_subscriptionTitle
-- table:
-    schema: brands
-    name: brand_paymentPartnership
-  object_relationships:
-  - name: brand
-    using:
-      foreign_key_constraint_on: brandId
-  remote_relationships:
-  - definition:
-      remote_field:
-        paymentHub_paymentPartnership:
-          arguments:
-            where:
-              id:
-                _eq: $paymentPartnershipId
-      hasura_fields:
-      - paymentPartnershipId
-      remote_schema: dailycloak
-    name: paymentPartnership
 - table:
     schema: brands
     name: brand_storeSetting
@@ -302,6 +290,13 @@
         table:
           schema: crm
           name: reward
+  computed_fields:
+  - name: isCampaignValid
+    definition:
+      function:
+        schema: crm
+        name: iscampaignvalid
+    comment: ""
 - table:
     schema: crm
     name: campaignType
@@ -361,6 +356,14 @@
         table:
           schema: crm
           name: rewardHistory
+  - name: rewardHistoryView2
+    using:
+      manual_configuration:
+        remote_table:
+          schema: crm
+          name: rewardHistoryView2
+        column_mapping:
+          id: couponId
   - name: rewards
     using:
       foreign_key_constraint_on:
@@ -368,6 +371,13 @@
         table:
           schema: crm
           name: reward
+  computed_fields:
+  - name: isCouponValid
+    definition:
+      function:
+        schema: crm
+        name: iscouponvalid
+    comment: ""
 - table:
     schema: crm
     name: customer
@@ -419,6 +429,14 @@
         table:
           schema: crm
           name: brand_customer
+  - name: customerInsight
+    using:
+      manual_configuration:
+        remote_table:
+          schema: insights
+          name: test5
+        column_mapping:
+          source: source
   - name: orderCarts
     using:
       foreign_key_constraint_on:
@@ -484,6 +502,17 @@
       - keycloakId
       remote_schema: dailykey
     name: platform_customerByClient
+  - definition:
+      remote_field:
+        paymentHub_payment:
+          arguments:
+            where:
+              customerKeycloakId:
+                _eq: $keycloakId
+      hasura_fields:
+      - keycloakId
+      remote_schema: dailycloak
+    name: attemptedPayments
   event_triggers:
   - name: createCustomerByClient
     definition:
@@ -870,6 +899,45 @@
   - name: walletTransaction
     using:
       foreign_key_constraint_on: walletTransactionId
+- table:
+    schema: crm
+    name: rewardHistoryView
+  object_relationships:
+  - name: date
+    using:
+      manual_configuration:
+        remote_table:
+          schema: insights
+          name: date
+        column_mapping:
+          rewarddate: date
+  - name: day
+    using:
+      manual_configuration:
+        remote_table:
+          schema: insights
+          name: day
+        column_mapping:
+          rewardday: dayNumber
+  - name: month
+    using:
+      manual_configuration:
+        remote_table:
+          schema: insights
+          name: month
+        column_mapping:
+          rewardmonth: number
+  - name: rewardHistory
+    using:
+      manual_configuration:
+        remote_table:
+          schema: crm
+          name: rewardHistory
+        column_mapping:
+          id: id
+- table:
+    schema: crm
+    name: rewardHistoryView2
 - table:
     schema: crm
     name: rewardType
@@ -1545,26 +1613,18 @@
   is_enum: true
 - table:
     schema: insights
+    name: app_module_insight
+  object_relationships:
+  - name: insight
+    using:
+      foreign_key_constraint_on: insightIdentifier
+- table:
+    schema: insights
     name: chart
   object_relationships:
   - name: insight
     using:
-      foreign_key_constraint_on: insisghtsTitle
-  array_relationships:
-  - name: chartOptions
-    using:
-      foreign_key_constraint_on:
-        column: chartId
-        table:
-          schema: insights
-          name: chartOption
-- table:
-    schema: insights
-    name: chartOption
-  object_relationships:
-  - name: chart
-    using:
-      foreign_key_constraint_on: chartId
+      foreign_key_constraint_on: insightIdentifier
 - table:
     schema: insights
     name: date
@@ -1581,6 +1641,22 @@
           name: order
         column_mapping:
           date: created_at
+  - name: rewardHistories
+    using:
+      manual_configuration:
+        remote_table:
+          schema: crm
+          name: rewardHistoryView
+        column_mapping:
+          date: rewarddate
+  - name: viewRewardHistories2
+    using:
+      manual_configuration:
+        remote_table:
+          schema: crm
+          name: rewardHistoryView2
+        column_mapping:
+          date: rewarddate
 - table:
     schema: insights
     name: day
@@ -1592,9 +1668,26 @@
         table:
           schema: insights
           name: date
+  - name: rewardHistories
+    using:
+      manual_configuration:
+        remote_table:
+          schema: crm
+          name: rewardHistoryView
+        column_mapping:
+          dayNumber: rewardday
 - table:
     schema: insights
     name: hour
+  array_relationships:
+  - name: rewardHistories
+    using:
+      manual_configuration:
+        remote_table:
+          schema: crm
+          name: rewardHistoryView
+        column_mapping:
+          hour: rewardhour
 - table:
     schema: insights
     name: insights
@@ -1603,10 +1696,17 @@
       select_by_pk: insight
     custom_column_names: {}
   array_relationships:
+  - name: apps_modules
+    using:
+      foreign_key_constraint_on:
+        column: insightIdentifier
+        table:
+          schema: insights
+          name: app_module_insight
   - name: charts
     using:
       foreign_key_constraint_on:
-        column: insisghtsTitle
+        column: insightIdentifier
         table:
           schema: insights
           name: chart
@@ -1628,6 +1728,15 @@
 - table:
     schema: insights
     name: month
+  array_relationships:
+  - name: rewardHistories
+    using:
+      manual_configuration:
+        remote_table:
+          schema: crm
+          name: rewardHistoryView
+        column_mapping:
+          number: rewardmonth
 - table:
     schema: insights
     name: ready_to_eat_product_transaction
@@ -1655,6 +1764,33 @@
           name: simpleRecipe
         column_mapping:
           simpleRecipeId: id
+- table:
+    schema: insights
+    name: test
+- table:
+    schema: insights
+    name: test1
+- table:
+    schema: insights
+    name: test2
+- table:
+    schema: insights
+    name: test3
+- table:
+    schema: insights
+    name: test4
+- table:
+    schema: insights
+    name: test5
+  array_relationships:
+  - name: customers
+    using:
+      manual_configuration:
+        remote_table:
+          schema: crm
+          name: customer
+        column_mapping:
+          source: source
 - table:
     schema: inventory
     name: bulkItem
@@ -1794,10 +1930,10 @@
       update:
         columns:
         - bulkItemId
+        - bulkWorkOrderId
         - id
         - orderSachetId
         - purchaseOrderItemId
-        - bulkWorkOrderId
         - comment
         - quantity
         - status
@@ -1866,7 +2002,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_BULK_WORK_ORDER_HISTORY_CREATE_UPDATE
+    webhook_from_env: WEBHOOK_BULK_WORK_ORDER_HISTORY_UPSERT
 - table:
     schema: inventory
     name: packagingHistory
@@ -1895,7 +2031,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook: https://932d9932708c.ngrok.io/api/inventory/packaging-history
+    webhook_from_env: WEBHOOK_PACKAGING_HISTORY_UPSERT
 - table:
     schema: inventory
     name: purchaseOrderItem
@@ -1936,8 +2072,6 @@
   - name: purchaseOrderItemCreateUpdate
     definition:
       enable_manual: true
-      insert:
-        columns: '*'
       update:
         columns:
         - bulkItemId
@@ -1954,7 +2088,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook: https://932d9932708c.ngrok.io/api/inventory/purchase-order-create-update
+    webhook_from_env: WEBHOOK_PURCHASE_ORDER_ITEM_UPSERT
 - table:
     schema: inventory
     name: sachetItem
@@ -2067,7 +2201,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_SACHET_HISTORY_CREATE_UPDATE
+    webhook_from_env: WEBHOOK_SACHET_HISTORY_UPSERT
 - table:
     schema: inventory
     name: sachetWorkOrder
@@ -2134,7 +2268,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_SACHET_WORK_ORDER_CREATE_UPDATE
+    webhook_from_env: WEBHOOK_SACHET_WORK_ORDER_UPSERT
 - table:
     schema: inventory
     name: supplier
@@ -2835,6 +2969,9 @@
       update_by_pk: updateOrder
     custom_column_names: {}
   object_relationships:
+  - name: brand
+    using:
+      foreign_key_constraint_on: brandId
   - name: customer
     using:
       foreign_key_constraint_on: keycloakId
@@ -2879,6 +3016,13 @@
         table:
           schema: order
           name: orderReadyToEatProduct
+  - name: rewardHistories
+    using:
+      foreign_key_constraint_on:
+        column: orderId
+        table:
+          schema: crm
+          name: rewardHistory
   computed_fields:
   - name: summary
     definition:
@@ -2921,7 +3065,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook: https://test.dailykit.org/server/event/print-kot
+    webhook_from_env: WEBHOOK_PRINT_KOT
 - table:
     schema: order
     name: orderInventoryProduct
@@ -2976,7 +3120,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook: https://test.dailykit.org/server/event/print-product
+    webhook_from_env: WEBHOOK_PRINT_PRODUCT_LABEL
 - table:
     schema: order
     name: orderMealKitProduct
@@ -3045,7 +3189,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook: https://test.dailykit.org/server/event/print-product
+    webhook_from_env: WEBHOOK_PRINT_PRODUCT_LABEL
 - table:
     schema: order
     name: orderPaymentStatusEnum
@@ -3113,13 +3257,12 @@
       enable_manual: true
       update:
         columns:
-        - price
         - assemblyStatus
     retry_conf:
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook: https://test.dailykit.org/server/event/print-product
+    webhook_from_env: WEBHOOK_PRINT_PRODUCT_LABEL
 - table:
     schema: order
     name: orderSachet
@@ -3213,34 +3356,18 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_ORDER_SACHET_CREATION
-  - name: orderSachetStatusUpdate
-    definition:
-      enable_manual: false
-      update:
-        columns:
-        - isAssembled
-        - status
-    retry_conf:
-      num_retries: 0
-      interval_sec: 10
-      timeout_sec: 60
-    webhook: https://caac25d3841a.ngrok.io/webhook/sachet/update
+    webhook_from_env: WEBHOOK_ORDER_SACHET_UPSERT
   - name: printOrderSachet
     definition:
       enable_manual: true
       update:
         columns:
         - isPortioned
-        - orderMealKitProductId
-        - packagingId
-        - packingStationId
-        - quantity
     retry_conf:
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook: https://test.dailykit.org/server/event/print-sachet
+    webhook_from_env: WEBHOOK_PRINT_SACHET
 - table:
     schema: order
     name: orderSachetStatusEnum
@@ -3306,7 +3433,7 @@
       hasura_fields:
       - mandiPackagingId
       remote_schema: dailycloak
-    name: mandiPackaging
+    name: mandiPacakging
 - table:
     schema: packaging
     name: packagingSpecifications
@@ -3613,6 +3740,12 @@
         schema: products
         name: inventoryProductNutrition
     comment: ""
+  - name: cartItem
+    definition:
+      function:
+        schema: products
+        name: inventoryProductCartItem
+    comment: ""
 - table:
     schema: products
     name: inventoryProductOption
@@ -3799,6 +3932,9 @@
         schema: products
         name: simpleRecipeProductOptionFullName
     comment: ""
+- table:
+    schema: public
+    name: test
 - table:
     schema: rules
     name: conditions
@@ -4065,6 +4201,12 @@
         schema: rules
         name: numberOfWalletAmountReward
     comment: ""
+  - name: budget
+    definition:
+      function:
+        schema: rules
+        name: budget
+    comment: ""
 - table:
     schema: safety
     name: safetyCheck
@@ -4134,6 +4276,9 @@
 - table:
     schema: settings
     name: appSettings
+- table:
+    schema: settings
+    name: app_module
 - table:
     schema: settings
     name: operationConfig
@@ -4454,19 +4599,6 @@
         schema: simpleRecipe
         name: issimplerecipevalid
     comment: ""
-  event_triggers:
-  - name: Recipe_Updated
-    definition:
-      enable_manual: false
-      update:
-        columns:
-        - name
-        - cuisine
-    retry_conf:
-      num_retries: 0
-      interval_sec: 10
-      timeout_sec: 60
-    webhook_from_env: WEBHOOK_DEFAULT_NOTIFICATION_HANDLER
 - table:
     schema: simpleRecipe
     name: simpleRecipeYield
@@ -4628,6 +4760,14 @@
     using:
       foreign_key_constraint_on: subscriptionId
   array_relationships:
+  - name: brand_subscriptionOccurences
+    using:
+      manual_configuration:
+        remote_table:
+          schema: brands
+          name: brand
+        column_mapping:
+          id: id
   - name: customers
     using:
       foreign_key_constraint_on:
@@ -4693,6 +4833,12 @@
     schema: subscription
     name: subscriptionOccurence_product
   object_relationships:
+  - name: inventoryProduct
+    using:
+      foreign_key_constraint_on: inventoryProductId
+  - name: inventoryProductOption
+    using:
+      foreign_key_constraint_on: inventoryProductOptionId
   - name: productCategoryRef
     using:
       foreign_key_constraint_on: productCategory
