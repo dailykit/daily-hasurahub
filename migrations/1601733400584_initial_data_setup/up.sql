@@ -1,18 +1,20 @@
 INSERT INTO "order"."orderStatusEnum" 
             (value, 
-             description) 
+             description, index) 
 VALUES      ('PENDING', 
-             'pending'), 
+             'pending',1), 
             ('UNDER_PROCESSING', 
-             'order is processing'), 
+             'order is processing',2), 
+            ('READY_TO_ASSEMBLE', 
+             'order is ready to assemble',3), 
             ('READY_TO_DISPATCH', 
-             'order is ready for delivery'), 
+             'order is ready for delivery',4), 
             ('OUT_FOR_DELIVERY', 
-             'order is in transit'), 
+             'order is in transit',5), 
             ('DELIVERED', 
-             'order is delivered'), 
+             'order is delivered',6), 
             ('REJECTED_OR_CANCELLED', 
-             'order is rejected or cancelled'); 
+             'order is rejected or cancelled',7); 
 
 
 INSERT INTO "order"."orderSachetStatusEnum" 
