@@ -3,4 +3,5 @@ VALUES
     ('Wallet', 'rewards'),
     ('Loyalty Points', 'rewards'),
     ('Coupons', 'rewards'),
-    ('Referral', 'rewards');
+    ('Referral', 'rewards'),
+    ('email', 'Email Notification');

@@ -5,3 +5,4 @@ VALUES
     (1, 18, '{ "isAvailable": true }'),
     (1, 19, '{ "isAvailable": true }'),
     (1, 20, '{ "isAvailable": true }');
+    (1, 21, '{ "name": "Subscription Shop", "email": "no-reply@dailykit.org", "template": { "data": { "id": "{{new.id}}" }, "template": { "name": "subscription", "type": "order", "format": "html" }}}');
