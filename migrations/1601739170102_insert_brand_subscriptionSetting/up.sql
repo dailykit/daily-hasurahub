@@ -51,4 +51,9 @@ VALUES
 , 
   (
       1, 16, '{"email":"test@dailykit.org","phoneNo":"+13124215900"}'
-  );
+  ),
+  (1, 17, '{ "isAvailable": true }'),
+    (1, 18, '{ "isAvailable": true }'),
+    (1, 19, '{ "isAvailable": true }'),
+    (1, 20, '{ "isAvailable": true }'),
+    (1, 21, '{ "name": "Subscription Shop", "email": "no-reply@dailykit.org", "template": { "data": { "id": "{{new.id}}" }, "template": { "name": "subscription", "type": "email", "format": "html" }}}');

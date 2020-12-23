@@ -79,6 +79,9 @@
             name: brand_subscriptionTitle
 - table:
     schema: brands
+    name: brand_paymentPartnership
+- table:
+    schema: brands
     name: brand_storeSetting
   object_relationships:
     - name: brand
@@ -154,6 +157,28 @@
             name: informationBlock
 - table:
     schema: content
+    name: identifier
+  object_relationships:
+    - name: page
+      using:
+        foreign_key_constraint_on: pageTitle
+  array_relationships:
+    - name: infomationSections
+      using:
+        foreign_key_constraint_on:
+          column: identifierTitle
+          table:
+            schema: content
+            name: infomationSection
+- table:
+    schema: content
+    name: infomationSection
+  object_relationships:
+    - name: identifier
+      using:
+        foreign_key_constraint_on: identifierTitle
+- table:
+    schema: content
     name: informationBlock
   object_relationships:
     - name: faq
@@ -173,6 +198,31 @@
           table:
             schema: content
             name: informationBlock
+- table:
+    schema: content
+    name: page
+  array_relationships:
+    - name: identifiers
+      using:
+        foreign_key_constraint_on:
+          column: pageTitle
+          table:
+            schema: content
+            name: identifier
+- table:
+    schema: content
+    name: template
+  event_triggers:
+    - name: handleTemplate
+      definition:
+        enable_manual: true
+        insert:
+          columns: "*"
+      retry_conf:
+        num_retries: 0
+        interval_sec: 10
+        timeout_sec: 60
+      webhook: https://156bd2d32e02.ngrok.io/webhooks/handle
 - table:
     schema: crm
     name: brand_campaign
@@ -239,6 +289,9 @@
     - name: customer
       using:
         foreign_key_constraint_on: keycloakId
+    - name: subscription
+      using:
+        foreign_key_constraint_on: subscriptionId
 - table:
     schema: crm
     name: campaign
@@ -475,15 +528,15 @@
   remote_relationships:
     - definition:
         remote_field:
-          platform_customers:
+          paymentHub_payment:
             arguments:
               where:
-                keycloakId:
+                customerKeycloakId:
                   _eq: $keycloakId
         hasura_fields:
           - keycloakId
-        remote_schema: dailykey
-      name: platform_customers
+        remote_schema: dailycloak
+      name: attemptedPayments
     - definition:
         remote_field:
           platform_customer:
@@ -504,15 +557,15 @@
       name: platform_customerByClient
     - definition:
         remote_field:
-          paymentHub_payment:
+          platform_customers:
             arguments:
               where:
-                customerKeycloakId:
+                keycloakId:
                   _eq: $keycloakId
         hasura_fields:
           - keycloakId
-        remote_schema: dailycloak
-      name: attemptedPayments
+        remote_schema: dailykey
+      name: platform_customers
   event_triggers:
     - name: createCustomerByClient
       definition:
@@ -527,6 +580,9 @@
       headers:
         - name: OrganizationId
           value_from_env: HEADER_REMOTE_SCHEMA_ORGANIZATIONID
+- table:
+    schema: crm
+    name: customerData
 - table:
     schema: crm
     name: customerReferral
@@ -573,6 +629,37 @@
     - name: customer
       using:
         foreign_key_constraint_on: keycloakId
+- table:
+    schema: crm
+    name: errorCart
+  object_relationships:
+    - name: order
+      using:
+        manual_configuration:
+          remote_table:
+            schema: order
+            name: order
+          column_mapping:
+            orderId: id
+    - name: orderCart
+      using:
+        manual_configuration:
+          remote_table:
+            schema: crm
+            name: orderCart
+          column_mapping:
+            orderCartId: id
+  event_triggers:
+    - name: Order_Failed
+      definition:
+        enable_manual: false
+        insert:
+          columns: "*"
+      retry_conf:
+        num_retries: 0
+        interval_sec: 10
+        timeout_sec: 60
+      webhook_from_env: WEBHOOK_DEFAULT_NOTIFICATION_HANDLER
 - table:
     schema: crm
     name: fact
@@ -766,7 +853,35 @@
           schema: crm
           name: walletAmountUsable
       comment: ""
+    - name: addOnTotal
+      definition:
+        function:
+          schema: crm
+          name: add_on_total
+      comment: ""
   remote_relationships:
+    - definition:
+        remote_field:
+          paymentHub_payment:
+            arguments:
+              where:
+                customerKeycloakId:
+                  _eq: $customerKeycloakId
+        hasura_fields:
+          - customerKeycloakId
+        remote_schema: dailycloak
+      name: attemptedPayments
+    - definition:
+        remote_field:
+          paymentHub_payment:
+            arguments:
+              where:
+                customerKeycloakId:
+                  _eq: $customerKeycloakId
+        hasura_fields:
+          - customerKeycloakId
+        remote_schema: dailycloak
+      name: payment
     - definition:
         remote_field:
           platform_stripePaymentMethod:
@@ -776,28 +891,6 @@
           - paymentMethodId
         remote_schema: dailykey
       name: paymentCard
-    - definition:
-        remote_field:
-          paymentHub_payment:
-            arguments:
-              where:
-                orderCartId:
-                  _eq: $id
-        hasura_fields:
-          - id
-        remote_schema: dailycloak
-      name: attemptedPayments
-    - definition:
-        remote_field:
-          paymentHub_payment:
-            arguments:
-              where:
-                id:
-                  _eq: $paymentId
-        hasura_fields:
-          - paymentId
-        remote_schema: dailycloak
-      name: payment
   event_triggers:
     - name: initiateOrder
       definition:
@@ -1471,6 +1564,9 @@
             name: ingredientSachet
 - table:
     schema: ingredient
+    name: ingredientSacahet_recipeHubSachet
+- table:
+    schema: ingredient
     name: ingredientSachet
   configuration:
     custom_root_fields:
@@ -1560,6 +1656,9 @@
     - name: labelTemplate
       using:
         foreign_key_constraint_on: labelTemplateId
+    - name: operationConfig
+      using:
+        foreign_key_constraint_on: operationConfigId
     - name: packaging
       using:
         foreign_key_constraint_on: packagingId
@@ -2886,6 +2985,9 @@
             schema: products
             name: simpleRecipeProductOption
 - table:
+    schema: onDemand
+    name: storeData
+- table:
     schema: onlineStore
     name: menuCollection
   configuration:
@@ -2991,6 +3093,9 @@
             name: date
           column_mapping:
             created_at: date
+    - name: thirdPartyOrder
+      using:
+        foreign_key_constraint_on: thirdPartyOrderId
   array_relationships:
     - name: orderInventoryProducts
       using:
@@ -3042,6 +3147,19 @@
       headers:
         - name: OrganizationId
           value_from_env: HEADER_REMOTE_SCHEMA_ORGANIZATIONID
+    - name: handleOrderStatus
+      definition:
+        enable_manual: true
+        update:
+          columns:
+            - isAccepted
+            - isRejected
+            - orderStatus
+      retry_conf:
+        num_retries: 0
+        interval_sec: 10
+        timeout_sec: 60
+      webhook: https://test.dailykit.org/server/api/order/status
     - name: Order_Created
       definition:
         enable_manual: false
@@ -3103,9 +3221,35 @@
     - name: order
       using:
         foreign_key_constraint_on: orderId
+    - name: orderModifierRef
+      using:
+        foreign_key_constraint_on: orderModifierId
     - name: packaging
       using:
         foreign_key_constraint_on: packagingId
+  array_relationships:
+    - name: orderModifiers
+      using:
+        foreign_key_constraint_on:
+          column: orderInventoryProductId
+          table:
+            schema: order
+            name: orderModifier
+    - name: orderSachets
+      using:
+        manual_configuration:
+          remote_table:
+            schema: order
+            name: orderSachet
+          column_mapping:
+            id: orderInventoryProductId
+  computed_fields:
+    - name: hasModifiers
+      definition:
+        function:
+          schema: order
+          name: inventory_has_modifiers
+      comment: ""
   event_triggers:
     - name: printOrderInventoryProductLabel
       definition:
@@ -3158,6 +3302,9 @@
     - name: order
       using:
         foreign_key_constraint_on: orderId
+    - name: orderModifierRef
+      using:
+        foreign_key_constraint_on: orderModifierId
     - name: packaging
       using:
         foreign_key_constraint_on: packagingId
@@ -3168,6 +3315,13 @@
       using:
         foreign_key_constraint_on: simpleRecipeProductOptionId
   array_relationships:
+    - name: orderModifiers
+      using:
+        foreign_key_constraint_on:
+          column: orderMealKitProductId
+          table:
+            schema: order
+            name: orderModifier
     - name: orderSachets
       using:
         foreign_key_constraint_on:
@@ -3175,6 +3329,13 @@
           table:
             schema: order
             name: orderSachet
+  computed_fields:
+    - name: hasModifiers
+      definition:
+        function:
+          schema: order
+          name: mealkit_has_modifiers
+      comment: ""
   event_triggers:
     - name: printOrderMealKitProductLabel
       definition:
@@ -3187,6 +3348,52 @@
         interval_sec: 10
         timeout_sec: 60
       webhook_from_env: WEBHOOK_PRINT_PRODUCT_LABEL
+- table:
+    schema: order
+    name: orderModifier
+  object_relationships:
+    - name: parentOrderInventoryProduct
+      using:
+        foreign_key_constraint_on: orderInventoryProductId
+    - name: parentOrderMealKitProduct
+      using:
+        foreign_key_constraint_on: orderMealKitProductId
+    - name: parentOrderReadyToEatProduct
+      using:
+        foreign_key_constraint_on: orderReadyToEatProductId
+  array_relationships:
+    - name: childOrderInventoryProducts
+      using:
+        foreign_key_constraint_on:
+          column: orderModifierId
+          table:
+            schema: order
+            name: orderInventoryProduct
+    - name: childOrderMealKitProducts
+      using:
+        foreign_key_constraint_on:
+          column: orderModifierId
+          table:
+            schema: order
+            name: orderMealKitProduct
+    - name: childOrderReadyToEatProducts
+      using:
+        foreign_key_constraint_on:
+          column: orderModifierId
+          table:
+            schema: order
+            name: orderReadyToEatProduct
+  event_triggers:
+    - name: handleOrderModifier
+      definition:
+        enable_manual: true
+        insert:
+          columns: "*"
+      retry_conf:
+        num_retries: 0
+        interval_sec: 10
+        timeout_sec: 60
+      webhook: https://test.dailykit.org/server/api/modifier
 - table:
     schema: order
     name: orderPaymentStatusEnum
@@ -3240,6 +3447,13 @@
       using:
         foreign_key_constraint_on: simpleRecipeProductOptionId
   array_relationships:
+    - name: orderModifiers
+      using:
+        foreign_key_constraint_on:
+          column: orderReadyToEatProductId
+          table:
+            schema: order
+            name: orderModifier
     - name: orderSachets
       using:
         manual_configuration:
@@ -3248,6 +3462,13 @@
             name: orderSachet
           column_mapping:
             id: orderReadyToEatProductId
+  computed_fields:
+    - name: hasModifiers
+      definition:
+        function:
+          schema: order
+          name: readytoeat_has_modifiers
+      comment: ""
   event_triggers:
     - name: printOrderReadyToEatProductLabel
       definition:
@@ -3282,9 +3503,20 @@
     - name: ingredientSachet
       using:
         foreign_key_constraint_on: ingredientSachetId
+    - name: orderInventoryProduct
+      using:
+        manual_configuration:
+          remote_table:
+            schema: order
+            name: orderInventoryProduct
+          column_mapping:
+            orderInventoryProductId: id
     - name: orderMealKitProduct
       using:
         foreign_key_constraint_on: orderMealKitProductId
+    - name: orderModifierRef
+      using:
+        foreign_key_constraint_on: orderModifierId
     - name: orderReadyToEatProduct
       using:
         manual_configuration:
@@ -3381,6 +3613,39 @@
           column_mapping:
             value: orderStatus
 - table:
+    schema: order
+    name: thirdPartyOrder
+  object_relationships:
+    - name: order
+      using:
+        manual_configuration:
+          remote_table:
+            schema: order
+            name: order
+          column_mapping:
+            id: thirdPartyOrderId
+  remote_relationships:
+    - definition:
+        remote_field:
+          marketPlaceHub_marketPlaceCompany_by_pk:
+            arguments:
+              title: $source
+        hasura_fields:
+          - source
+        remote_schema: dailycloak
+      name: thirdPartyCompany
+  event_triggers:
+    - name: handleThirdPartyOrders
+      definition:
+        enable_manual: true
+        insert:
+          columns: "*"
+      retry_conf:
+        num_retries: 0
+        interval_sec: 10
+        timeout_sec: 60
+      webhook: https://08e085bb8270.ngrok.io/event/order/third-party
+- table:
     schema: packaging
     name: packaging
   configuration:
@@ -3430,7 +3695,7 @@
         hasura_fields:
           - mandiPackagingId
         remote_schema: dailycloak
-      name: mandiPacakging
+      name: mandiPackaging
 - table:
     schema: packaging
     name: packagingSpecifications
@@ -3539,6 +3804,13 @@
           table:
             schema: order
             name: orderReadyToEatProduct
+  computed_fields:
+    - name: basePrice
+      definition:
+        function:
+          schema: products
+          name: comboProductComponentBasePrice
+      comment: ""
 - table:
     schema: products
     name: customizableProduct
@@ -3652,6 +3924,12 @@
             schema: order
             name: orderReadyToEatProduct
   computed_fields:
+    - name: product
+      definition:
+        function:
+          schema: products
+          name: customizableProductOptionProduct
+      comment: ""
     - name: fullName
       definition:
         function:
@@ -3929,6 +4207,27 @@
           schema: products
           name: simpleRecipeProductOptionFullName
       comment: ""
+- table:
+    schema: public
+    name: response
+- table:
+    schema: public
+    name: table
+  event_triggers:
+    - name: test_trigger
+      definition:
+        enable_manual: false
+        update:
+          columns:
+            - title
+      retry_conf:
+        num_retries: 0
+        interval_sec: 10
+        timeout_sec: 60
+      webhook: https://example.com
+- table:
+    schema: public
+    name: test
 - table:
     schema: rules
     name: conditions

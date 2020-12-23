@@ -55,4 +55,9 @@ INSERT INTO
 , 
          (
             1, 14, '{"isStoreLive":false,"isStripeConfigured":true}'
-         );
+         ),
+         
+     (1, 15, '{ "isAvailable": true }'), 
+     (1, 16, '{ "isAvailable": true }'),  
+     (1, 17, '{ "isAvailable": true }'),
+     (1, 18, '{ "max": 5, "percentage": 50, "converstionRate": 0.5 }');;

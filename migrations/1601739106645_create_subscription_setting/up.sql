@@ -63,5 +63,10 @@ VALUES
 , 
   (
       'brand', 'Contact'
-  )
+  ),
+  ('rewards','Wallet'),
+    ('rewards','Loyalty Points'),
+    ('rewards','Coupons'),
+    ('rewards','Referral'),
+    ('Email Notification','email');
 ;

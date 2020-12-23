@@ -1,3 +1,15 @@
 - function:
+    schema: crm
+    name: getCustomer2
+- function:
+    schema: crm
+    name: setReferralCode
+- function:
+    schema: inventory
+    name: matchSachetSupplierItem
+- function:
     schema: onDemand
     name: getMenu
+- function:
+    schema: onDemand
+    name: getStoreData
