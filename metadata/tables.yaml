@@ -2988,71 +2988,6 @@
     schema: onDemand
     name: storeData
 - table:
-    schema: onlineStore
-    name: menuCollection
-  configuration:
-    custom_root_fields:
-      insert: createMenuCollection
-      select_aggregate: menuCollectionsAggregate
-      select_by_pk: menuCollection
-      select: menuCollections
-      delete: deleteMenuCollection
-      update: updateMenuCollection
-    custom_column_names: {}
-- table:
-    schema: onlineStore
-    name: productSku
-  array_relationships:
-    - name: comboProducts
-      using:
-        foreign_key_constraint_on:
-          column: productSku
-          table:
-            schema: products
-            name: comboProduct
-    - name: customizableProducts
-      using:
-        foreign_key_constraint_on:
-          column: productSku
-          table:
-            schema: products
-            name: customizableProduct
-    - name: inventoryProducts
-      using:
-        foreign_key_constraint_on:
-          column: productSku
-          table:
-            schema: products
-            name: inventoryProduct
-    - name: simpleRecipeProducts
-      using:
-        foreign_key_constraint_on:
-          column: productSku
-          table:
-            schema: products
-            name: simpleRecipeProduct
-- table:
-    schema: onlineStore
-    name: rmkCollection
-  computed_fields:
-    - name: isValid
-      definition:
-        function:
-          schema: onlineStore
-          name: isrmkcollectionvalid
-      comment: ""
-- table:
-    schema: order
-    name: assemblyEnum
-  array_relationships:
-    - name: orderSimpleRecipeProducts
-      using:
-        foreign_key_constraint_on:
-          column: assemblyStatus
-          table:
-            schema: order
-            name: orderMealKitProduct
-- table:
     schema: order
     name: order
   configuration:
@@ -3159,7 +3094,7 @@
         num_retries: 0
         interval_sec: 10
         timeout_sec: 60
-      webhook: https://test.dailykit.org/server/api/order/status
+      webhook_from_env: WEBHOOK_HANDLE_ORDER_STATUS
     - name: Order_Created
       definition:
         enable_manual: false
@@ -3278,9 +3213,6 @@
       update_by_pk: updateOrderMealKitProduct
     custom_column_names: {}
   object_relationships:
-    - name: assemblyEnum
-      using:
-        foreign_key_constraint_on: assemblyStatus
     - name: assemblyStation
       using:
         foreign_key_constraint_on: assemblyStationId
@@ -3393,10 +3325,7 @@
         num_retries: 0
         interval_sec: 10
         timeout_sec: 60
-      webhook: https://test.dailykit.org/server/api/modifier
-- table:
-    schema: order
-    name: orderPaymentStatusEnum
+      webhook_from_env: WEBHOOK_HANDLE_ORDER_MODIFIER
 - table:
     schema: order
     name: orderReadyToEatProduct
@@ -3599,9 +3528,6 @@
       webhook_from_env: WEBHOOK_PRINT_SACHET_LABEL
 - table:
     schema: order
-    name: orderSachetStatusEnum
-- table:
-    schema: order
     name: orderStatusEnum
   array_relationships:
     - name: orders
@@ -3644,7 +3570,7 @@
         num_retries: 0
         interval_sec: 10
         timeout_sec: 60
-      webhook: https://08e085bb8270.ngrok.io/event/order/third-party
+      webhook_from_env: WEBHOOK_HANDLE_THIRD_PARTY_ORDER
 - table:
     schema: packaging
     name: packaging
@@ -3711,10 +3637,6 @@
       delete: deleteComboProduct
       update: updateComboProduct
     custom_column_names: {}
-  object_relationships:
-    - name: productSkuReference
-      using:
-        foreign_key_constraint_on: productSku
   array_relationships:
     - name: comboProductComponents
       using:
@@ -3827,9 +3749,6 @@
     - name: defaultCustomizableProductOption
       using:
         foreign_key_constraint_on: default
-    - name: productSkuReference
-      using:
-        foreign_key_constraint_on: productSku
   array_relationships:
     - name: comboProductComponents
       using:
@@ -3952,9 +3871,6 @@
     - name: defaultInventoryProductOption
       using:
         foreign_key_constraint_on: default
-    - name: productSkuReference
-      using:
-        foreign_key_constraint_on: productSku
     - name: sachetItem
       using:
         foreign_key_constraint_on: sachetItemId
@@ -4083,9 +3999,6 @@
     - name: defaultSimpleRecipeProductOption
       using:
         foreign_key_constraint_on: default
-    - name: productSkuReference
-      using:
-        foreign_key_constraint_on: productSku
     - name: simpleRecipe
       using:
         foreign_key_constraint_on: simpleRecipeId
@@ -4210,24 +4123,6 @@
 - table:
     schema: public
     name: response
-- table:
-    schema: public
-    name: table
-  event_triggers:
-    - name: test_trigger
-      definition:
-        enable_manual: false
-        update:
-          columns:
-            - title
-      retry_conf:
-        num_retries: 0
-        interval_sec: 10
-        timeout_sec: 60
-      webhook: https://example.com
-- table:
-    schema: public
-    name: test
 - table:
     schema: rules
     name: conditions
