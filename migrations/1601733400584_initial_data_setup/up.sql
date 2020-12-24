@@ -115,7 +115,8 @@ INSERT INTO "deviceHub"."printerType"
             ("type") 
 VALUES      ('LABEL_PRINTER'), 
             ('RECEIPT_PRINTER'), 
-            ('OTHER_PRINTER'); 
+            ('OTHER_PRINTER'),
+            ('KOT_PRINTER'); 
 
 
 INSERT INTO ingredient."modeOfFulfillmentEnum" 
