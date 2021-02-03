@@ -24,7 +24,7 @@ VALUES
    (1, 21, '{ "value": "Nothing set!" }'),
    (1, 22, '{ "value": "Nothing set!" }'),
    (1, 23, '{ "value": "Nothing set!" }'),
-   (1, 24, '{ "value": "<script async>console.log("No dynamic scripts added!")</script>" }'),
+   (1, 24, '{ "value": "" }'),
    (1, 25, '{ "isRefundPolicyAvailable": true, "isPrivacyPolicyAvailable": true, "isTermsAndConditionsAvailable": true }'),
    (1, 26, '{ "name": "Test", "email": "no-reply@dailykit.org", "template": { "data": { "id": "{{new.id}}" }, "template": { "name": "order_delivered", "type": "email", "format": "html" } } }'),
-   (1, 27, '{ "name": "Test", "email": "no-reply@dailykit.org", "template": { "data": { "id": "{{new.id}}" }, "template": { "name": "order_cancelled", "type": "email", "format": "html" } } }'),
+   (1, 27, '{ "name": "Test", "email": "no-reply@dailykit.org", "template": { "data": { "id": "{{new.id}}" }, "template": { "name": "order_cancelled", "type": "email", "format": "html" } } }');

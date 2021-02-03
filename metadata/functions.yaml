@@ -12,4 +12,10 @@
     name: getMenu
 - function:
     schema: onDemand
+    name: getMenuV2
+- function:
+    schema: onDemand
+    name: getOnlineStoreProduct
+- function:
+    schema: onDemand
     name: getStoreData

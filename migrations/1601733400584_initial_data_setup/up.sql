@@ -12,26 +12,7 @@ VALUES      ('PENDING',
             ('OUT_FOR_DELIVERY', 
              'order is in transit',5), 
             ('DELIVERED', 
-             'order is delivered',6), 
-            ('REJECTED_OR_CANCELLED', 
-             'order is rejected or cancelled',7); 
-
-
-INSERT INTO "order"."orderSachetStatusEnum" 
-            (value, 
-             description) 
-VALUES      ('PENDING', 
-             'pending'), 
-            ('PACKED', 
-             'Item is packed'); 
-
-INSERT INTO "order"."assemblyEnum" 
-            (value, 
-             description) 
-VALUES      ('PENDING', 
-             'pending'), 
-            ('COMPLETED', 
-             'Item has been assembled'); 
+             'order is delivered',6); 
 
 INSERT INTO notifications."type" 
             (id, 
@@ -126,12 +107,6 @@ VALUES      ('realTime',
              'realm time'), 
             ('plannedLot', 
              'planned lot'); 
-
-INSERT INTO "order"."orderPaymentStatusEnum" 
-            (value, 
-             description) 
-VALUES      ('PENDING', 
-             'pending');
 			 
 INSERT INTO fulfilment."deliveryService"
 			("isThirdParty",
