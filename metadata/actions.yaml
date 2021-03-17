@@ -2,19 +2,19 @@ actions:
 - name: createPrintJob
   definition:
     kind: synchronous
-    handler: '{{DAILYOS_SERVER_URL}}/server/api/printer/print'
+    handler: '{{DAILYOS_SERVER_URL}}/api/printer/print'
 - name: printJobs
   definition:
     kind: ""
-    handler: '{{DAILYOS_SERVER_URL}}/server/api/printer/print/jobs'
+    handler: '{{DAILYOS_SERVER_URL}}/api/printer/print/jobs'
 - name: processRewards
   definition:
     kind: synchronous
-    handler: '{{DAILYOS_SERVER_URL}}/server/api/rewards/process'
+    handler: '{{DAILYOS_SERVER_URL}}/api/rewards/process'
 - name: sendEmail
   definition:
     kind: synchronous
-    handler: '{{DAILYOS_SERVER_URL}}/server/api/sendmail'
+    handler: '{{DAILYOS_SERVER_URL}}/api/sendmail'
 custom_types:
   enums: []
   input_objects:

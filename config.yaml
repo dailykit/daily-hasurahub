@@ -1,6 +1,5 @@
 version: 2
-endpoint: https://nash.dailykit.org/datahub
-admin_secret: 74b5713e-a123-43e1-86a5-73e4a7738fa2
+endpoint: https://prav3.dailykit.org/datahub
 metadata_directory: metadata
 actions:
   kind: synchronous

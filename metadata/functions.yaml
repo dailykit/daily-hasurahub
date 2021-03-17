@@ -5,17 +5,29 @@
     schema: crm
     name: setReferralCode
 - function:
+    schema: editor
+    name: HandlePriority4
+- function:
+    schema: inventory
+    name: matchIngredientIngredient
+- function:
+    schema: inventory
+    name: matchIngredientSachetItem
+- function:
+    schema: inventory
+    name: matchIngredientSupplierItem
+- function:
+    schema: inventory
+    name: matchSachetIngredientSachet
+- function:
+    schema: inventory
+    name: matchSachetSachetItem
+- function:
     schema: inventory
     name: matchSachetSupplierItem
 - function:
     schema: onDemand
-    name: getMenu
-- function:
-    schema: onDemand
     name: getMenuV2
-- function:
-    schema: onDemand
-    name: getOnlineStoreProduct
 - function:
     schema: onDemand
     name: getStoreData

@@ -13,6 +13,15 @@
       delete_by_pk: deleteBrand
       update_by_pk: updateBrand
     custom_column_names: {}
+  object_relationships:
+  - name: website
+    using:
+      manual_configuration:
+        remote_table:
+          schema: website
+          name: website
+        column_mapping:
+          id: brandId
   array_relationships:
   - name: brand_campaigns
     using:
@@ -35,13 +44,14 @@
         table:
           schema: crm
           name: brand_customer
-  - name: brand_Orders
+  - name: carts
     using:
-      foreign_key_constraint_on:
-        column: brandId
-        table:
+      manual_configuration:
+        remote_table:
           schema: order
-          name: order
+          name: cart
+        column_mapping:
+          id: brandId
   - name: collections
     using:
       foreign_key_constraint_on:
@@ -77,9 +87,57 @@
         table:
           schema: subscription
           name: brand_subscriptionTitle
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - domain
+      - isDefault
+      - title
+      - isPublished
+      - onDemandRequested
+      - subscriptionRequested
+      - isArchived
+      - parseurMailBoxId
+      - importHistoryId
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - importHistoryId
+      - domain
+      - onDemandRequested
+      - subscriptionRequested
+      - isArchived
+      - isDefault
+      - parseurMailBoxId
+      - title
+      - id
+      - isPublished
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: brands
     name: brand_paymentPartnership
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - brandId
+      - paymentPartnershipId
+      - isActive
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - brandId
+      - paymentPartnershipId
+      - isActive
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: brands
     name: brand_storeSetting
@@ -90,6 +148,25 @@
   - name: onDemandSetting
     using:
       foreign_key_constraint_on: storeSettingId
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - brandId
+      - storeSettingId
+      - value
+      - importHistoryId
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - importHistoryId
+      - brandId
+      - storeSettingId
+      - value
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: brands
     name: brand_subscriptionStoreSetting
@@ -100,6 +177,23 @@
   - name: subscriptionStoreSetting
     using:
       foreign_key_constraint_on: subscriptionStoreSettingId
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - brandId
+      - subscriptionStoreSettingId
+      - value
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - brandId
+      - subscriptionStoreSettingId
+      - value
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: brands
     name: storeSetting
@@ -132,6 +226,16 @@
         table:
           schema: brands
           name: brand_storeSetting
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - identifier
+      - value
+      - type
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: brands
     name: subscriptionStoreSetting
@@ -144,17 +248,16 @@
           name: brand_subscriptionStoreSetting
         column_mapping:
           id: subscriptionStoreSettingId
-- table:
-    schema: content
-    name: faqs
-  array_relationships:
-  - name: informationBlocks
-    using:
-      foreign_key_constraint_on:
-        column: faqsId
-        table:
-          schema: content
-          name: informationBlock
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - identifier
+      - value
+      - type
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: content
     name: identifier
@@ -162,42 +265,21 @@
   - name: page
     using:
       foreign_key_constraint_on: pageTitle
-  array_relationships:
-  - name: infomationSections
-    using:
-      foreign_key_constraint_on:
-        column: identifierTitle
-        table:
-          schema: content
-          name: infomationSection
-- table:
-    schema: content
-    name: infomationSection
-  object_relationships:
-  - name: identifier
-    using:
-      foreign_key_constraint_on: identifierTitle
-- table:
-    schema: content
-    name: informationBlock
-  object_relationships:
-  - name: faq
-    using:
-      foreign_key_constraint_on: faqsId
-  - name: informationGrid
-    using:
-      foreign_key_constraint_on: informationGridId
-- table:
-    schema: content
-    name: informationGrid
-  array_relationships:
-  - name: informationBlocks
-    using:
-      foreign_key_constraint_on:
-        column: informationGridId
-        table:
-          schema: content
-          name: informationBlock
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - title
+      - pageTitle
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - pageTitle
+      - title
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: content
     name: page
@@ -209,9 +291,59 @@
         table:
           schema: content
           name: identifier
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - title
+      - description
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - description
+      - title
+      filter: {}
+      allow_aggregations: true
+- table:
+    schema: content
+    name: subscriptionDivIds
+  object_relationships:
+  - name: subscriptionDivFileId
+    using:
+      foreign_key_constraint_on: fileId
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - fileId
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - fileId
+      - id
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: content
     name: template
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - id
+      filter: {}
+      allow_aggregations: true
   event_triggers:
   - name: handleTemplate
     definition:
@@ -292,6 +424,30 @@
   - name: subscription
     using:
       foreign_key_constraint_on: subscriptionId
+  array_relationships:
+  - name: subscriptionOccurences
+    using:
+      foreign_key_constraint_on:
+        column: brand_customerId
+        table:
+          schema: subscription
+          name: subscriptionOccurence_customer
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - keycloakId
+      - brandId
+      - created_at
+      - updated_at
+      - isSubscriber
+      - subscriptionId
+      - subscriptionAddressId
+      - subscriptionPaymentMethodId
+      - isAutoSelectOptOut
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: crm
     name: campaign
@@ -350,6 +506,41 @@
         schema: crm
         name: iscampaignvalid
     comment: ""
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - type
+      - metaDetails
+      - conditionId
+      - isRewardMulti
+      - isActive
+      - priority
+      - created_at
+      - updated_at
+      - isArchived
+      computed_fields:
+      - isCampaignValid
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - id
+      - type
+      - metaDetails
+      - conditionId
+      - isRewardMulti
+      - isActive
+      - priority
+      - created_at
+      - updated_at
+      - isArchived
+      computed_fields:
+      - isCampaignValid
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: crm
     name: campaignType
@@ -368,6 +559,21 @@
         table:
           schema: crm
           name: rewardType_campaignType
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - value
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - id
+      - value
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: crm
     name: coupon
@@ -395,13 +601,6 @@
         table:
           schema: crm
           name: brand_coupon
-  - name: customers
-    using:
-      foreign_key_constraint_on:
-        column: couponId
-        table:
-          schema: crm
-          name: customer_voucher
   - name: rewardHistories
     using:
       foreign_key_constraint_on:
@@ -409,14 +608,6 @@
         table:
           schema: crm
           name: rewardHistory
-  - name: rewardHistoryView2
-    using:
-      manual_configuration:
-        remote_table:
-          schema: crm
-          name: rewardHistoryView2
-        column_mapping:
-          id: couponId
   - name: rewards
     using:
       foreign_key_constraint_on:
@@ -431,6 +622,37 @@
         schema: crm
         name: iscouponvalid
     comment: ""
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - isActive
+      - metaDetails
+      - code
+      - isRewardMulti
+      - visibleConditionId
+      - isVoucher
+      - isArchived
+      computed_fields:
+      - isCouponValid
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - isVoucher
+      - code
+      - isRewardMulti
+      - id
+      - isArchived
+      - metaDetails
+      - visibleConditionId
+      - isActive
+      computed_fields:
+      - isCouponValid
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: crm
     name: customer
@@ -482,6 +704,14 @@
         table:
           schema: crm
           name: brand_customer
+  - name: carts
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: cart
+        column_mapping:
+          id: customerId
   - name: customerInsight
     using:
       manual_configuration:
@@ -490,20 +720,13 @@
           name: test5
         column_mapping:
           source: source
-  - name: orderCarts
-    using:
-      foreign_key_constraint_on:
-        column: customerId
-        table:
-          schema: crm
-          name: orderCart
-  - name: orders
+  - name: customerReferrals
     using:
       foreign_key_constraint_on:
         column: keycloakId
         table:
-          schema: order
-          name: order
+          schema: crm
+          name: customerReferral
   - name: rewardHistories
     using:
       foreign_key_constraint_on:
@@ -518,13 +741,6 @@
         table:
           schema: subscription
           name: subscriptionOccurence_customer
-  - name: vouchers
-    using:
-      foreign_key_constraint_on:
-        column: keycloakId
-        table:
-          schema: crm
-          name: customer_voucher
   remote_relationships:
   - definition:
       remote_field:
@@ -566,6 +782,26 @@
       - keycloakId
       remote_schema: dailykey
     name: platform_customers
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - source
+      - email
+      - keycloakId
+      - clientId
+      - isSubscriber
+      - subscriptionId
+      - subscriptionAddressId
+      - subscriptionPaymentMethodId
+      - created_at
+      - updated_at
+      - isTest
+      - sourceBrandId
+      - isArchived
+      filter: {}
+      allow_aggregations: true
   event_triggers:
   - name: createCustomerByClient
     definition:
@@ -616,50 +852,20 @@
         table:
           schema: crm
           name: customerReferral
-- table:
-    schema: crm
-    name: customerView
-- table:
-    schema: crm
-    name: customer_voucher
-  object_relationships:
-  - name: coupon
-    using:
-      foreign_key_constraint_on: couponId
-  - name: customer
-    using:
-      foreign_key_constraint_on: keycloakId
-- table:
-    schema: crm
-    name: errorCart
-  object_relationships:
-  - name: order
-    using:
-      manual_configuration:
-        remote_table:
-          schema: order
-          name: order
-        column_mapping:
-          orderId: id
-  - name: orderCart
-    using:
-      manual_configuration:
-        remote_table:
-          schema: crm
-          name: orderCart
-        column_mapping:
-          orderCartId: id
-  event_triggers:
-  - name: Order_Failed
-    definition:
-      enable_manual: false
-      insert:
-        columns: '*'
-    retry_conf:
-      num_retries: 0
-      interval_sec: 10
-      timeout_sec: 60
-    webhook_from_env: WEBHOOK_DEFAULT_NOTIFICATION_HANDLER
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - keycloakId
+      - referralCode
+      - referredByCode
+      - referralStatus
+      - referralCampaignId
+      - signupCampaignId
+      - signupStatus
+      - brandId
+      filter: {}
 - table:
     schema: crm
     name: fact
@@ -715,9 +921,6 @@
   - name: loyaltyPoint
     using:
       foreign_key_constraint_on: loyaltyPointId
-  - name: orderCart
-    using:
-      foreign_key_constraint_on: orderCartId
   array_relationships:
   - name: rewardHistories
     using:
@@ -726,194 +929,6 @@
         table:
           schema: crm
           name: rewardHistory
-- table:
-    schema: crm
-    name: orderCart
-  configuration:
-    custom_root_fields:
-      insert: createCarts
-      select_aggregate: cartAggregate
-      insert_one: createCart
-      select_by_pk: cartByPK
-      select: cart
-      delete: deleteCarts
-      update: updateCart
-      delete_by_pk: deleteCartByPK
-      update_by_pk: updateCartByPK
-    custom_column_names: {}
-  object_relationships:
-  - name: brand
-    using:
-      foreign_key_constraint_on: brandId
-  - name: customer
-    using:
-      foreign_key_constraint_on: customerId
-  - name: order
-    using:
-      foreign_key_constraint_on: orderId
-  - name: rmkOrder
-    using:
-      manual_configuration:
-        remote_table:
-          schema: crm
-          name: rmkOrder
-        column_mapping:
-          id: orderCartId
-  - name: subscriptionOccurence
-    using:
-      foreign_key_constraint_on: subscriptionOccurenceId
-  array_relationships:
-  - name: loyaltyPointTransactions
-    using:
-      foreign_key_constraint_on:
-        column: orderCartId
-        table:
-          schema: crm
-          name: loyaltyPointTransaction
-  - name: rewardHistories
-    using:
-      foreign_key_constraint_on:
-        column: orderCartId
-        table:
-          schema: crm
-          name: rewardHistory
-  - name: rewards
-    using:
-      foreign_key_constraint_on:
-        column: orderCartId
-        table:
-          schema: crm
-          name: orderCart_rewards
-  - name: subscriptionOccurenceCustomers
-    using:
-      foreign_key_constraint_on:
-        column: orderCartId
-        table:
-          schema: subscription
-          name: subscriptionOccurence_customer
-  - name: walletTransactions
-    using:
-      foreign_key_constraint_on:
-        column: orderCartId
-        table:
-          schema: crm
-          name: walletTransaction
-  computed_fields:
-  - name: isValid
-    definition:
-      function:
-        schema: crm
-        name: iscartvalid
-    comment: ""
-  - name: itemTotal
-    definition:
-      function:
-        schema: crm
-        name: itemtotal
-    comment: ""
-  - name: tax
-    definition:
-      function:
-        schema: crm
-        name: tax
-    comment: ""
-  - name: taxPercent
-    definition:
-      function:
-        schema: crm
-        name: taxpercent
-    comment: ""
-  - name: totalPrice
-    definition:
-      function:
-        schema: crm
-        name: totalprice
-    comment: ""
-  - name: deliveryPrice
-    definition:
-      function:
-        schema: crm
-        name: deliveryprice
-    comment: ""
-  - name: discount
-    definition:
-      function:
-        schema: crm
-        name: discount
-    comment: ""
-  - name: loyaltyPointsUsable
-    definition:
-      function:
-        schema: crm
-        name: loyaltyPointsUsable
-    comment: ""
-  - name: walletAmountUsable
-    definition:
-      function:
-        schema: crm
-        name: walletAmountUsable
-    comment: ""
-  - name: addOnTotal
-    definition:
-      function:
-        schema: crm
-        name: add_on_total
-    comment: ""
-  remote_relationships:
-  - definition:
-      remote_field:
-        paymentHub_payment:
-          arguments:
-            where:
-              customerKeycloakId:
-                _eq: $customerKeycloakId
-      hasura_fields:
-      - customerKeycloakId
-      remote_schema: dailycloak
-    name: attemptedPayments
-  - definition:
-      remote_field:
-        paymentHub_payment:
-          arguments:
-            where:
-              customerKeycloakId:
-                _eq: $customerKeycloakId
-      hasura_fields:
-      - customerKeycloakId
-      remote_schema: dailycloak
-    name: payment
-  - definition:
-      remote_field:
-        platform_stripePaymentMethod:
-          arguments:
-            stripePaymentMethodId: $paymentMethodId
-      hasura_fields:
-      - paymentMethodId
-      remote_schema: dailykey
-    name: paymentCard
-  event_triggers:
-  - name: initiateOrder
-    definition:
-      enable_manual: true
-      update:
-        columns:
-        - paymentStatus
-    retry_conf:
-      num_retries: 0
-      interval_sec: 10
-      timeout_sec: 60
-    webhook_from_env: WEBHOOK_INITIATE_ORDER
-  - name: initiatePayment
-    definition:
-      enable_manual: true
-      update:
-        columns:
-        - status
-    retry_conf:
-      num_retries: 0
-      interval_sec: 10
-      timeout_sec: 60
-    webhook_from_env: WEBHOOK_INITIATE_PAYMENT
 - table:
     schema: crm
     name: orderCart_rewards
@@ -983,54 +998,12 @@
   - name: order
     using:
       foreign_key_constraint_on: orderId
-  - name: orderCart
-    using:
-      foreign_key_constraint_on: orderCartId
   - name: reward
     using:
       foreign_key_constraint_on: rewardId
   - name: walletTransaction
     using:
       foreign_key_constraint_on: walletTransactionId
-- table:
-    schema: crm
-    name: rewardHistoryView
-  object_relationships:
-  - name: date
-    using:
-      manual_configuration:
-        remote_table:
-          schema: insights
-          name: date
-        column_mapping:
-          rewarddate: date
-  - name: day
-    using:
-      manual_configuration:
-        remote_table:
-          schema: insights
-          name: day
-        column_mapping:
-          rewardday: dayNumber
-  - name: month
-    using:
-      manual_configuration:
-        remote_table:
-          schema: insights
-          name: month
-        column_mapping:
-          rewardmonth: number
-  - name: rewardHistory
-    using:
-      manual_configuration:
-        remote_table:
-          schema: crm
-          name: rewardHistory
-        column_mapping:
-          id: id
-- table:
-    schema: crm
-    name: rewardHistoryView2
 - table:
     schema: crm
     name: rewardType
@@ -1052,16 +1025,6 @@
   - name: rewardType
     using:
       foreign_key_constraint_on: rewardTypeId
-- table:
-    schema: crm
-    name: rmkOrder
-  object_relationships:
-  - name: orderCart
-    using:
-      foreign_key_constraint_on: orderCartId
-- table:
-    schema: crm
-    name: session
 - table:
     schema: crm
     name: wallet
@@ -1263,6 +1226,247 @@
   - name: computer
     using:
       foreign_key_constraint_on: computerId
+- table:
+    schema: editor
+    name: block
+  object_relationships:
+  - name: blockFile
+    using:
+      manual_configuration:
+        remote_table:
+          schema: editor
+          name: file
+        column_mapping:
+          fileId: id
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - name
+      - path
+      - assets
+      - fileId
+      - category
+      - created_at
+      - updated_at
+      filter: {}
+  - role: guest-consumer
+    permission:
+      columns:
+      - id
+      - name
+      - path
+      - assets
+      - fileId
+      - category
+      - created_at
+      - updated_at
+      filter: {}
+- table:
+    schema: editor
+    name: cssFileLinks
+  object_relationships:
+  - name: cssFile
+    using:
+      manual_configuration:
+        remote_table:
+          schema: editor
+          name: file
+        column_mapping:
+          cssFileId: id
+  - name: parentFile
+    using:
+      manual_configuration:
+        remote_table:
+          schema: editor
+          name: file
+        column_mapping:
+          guiFileId: id
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - guiFileId
+      - cssFileId
+      - position
+      - created_at
+      - updated_at
+      - id
+      filter: {}
+  - role: guest-consumer
+    permission:
+      columns:
+      - cssFileId
+      - guiFileId
+      - id
+      - position
+      - created_at
+      - updated_at
+      filter: {}
+- table:
+    schema: editor
+    name: file
+  array_relationships:
+  - name: linkedCssFiles
+    using:
+      manual_configuration:
+        remote_table:
+          schema: editor
+          name: cssFileLinks
+        column_mapping:
+          id: guiFileId
+  - name: linkedJsFiles
+    using:
+      manual_configuration:
+        remote_table:
+          schema: editor
+          name: jsFileLinks
+        column_mapping:
+          id: guiFileId
+  - name: linkedParentFilesAsCss
+    using:
+      manual_configuration:
+        remote_table:
+          schema: editor
+          name: cssFileLinks
+        column_mapping:
+          id: cssFileId
+  - name: linkedParentFilesAsJs
+    using:
+      manual_configuration:
+        remote_table:
+          schema: editor
+          name: jsFileLinks
+        column_mapping:
+          id: jsFileId
+  - name: subscriptionDivId
+    using:
+      foreign_key_constraint_on:
+        column: fileId
+        table:
+          schema: content
+          name: subscriptionDivIds
+  - name: websitePageModules
+    using:
+      foreign_key_constraint_on:
+        column: fileId
+        table:
+          schema: website
+          name: websitePageModule
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - path
+      - created_at
+      - updated_at
+      - fileType
+      - commits
+      - lastSaved
+      - fileName
+      - isTemplate
+      - isBlock
+      filter: {}
+  - role: guest-consumer
+    permission:
+      columns:
+      - isBlock
+      - isTemplate
+      - id
+      - commits
+      - fileName
+      - fileType
+      - path
+      - created_at
+      - lastSaved
+      - updated_at
+      filter: {}
+- table:
+    schema: editor
+    name: jsFileLinks
+  object_relationships:
+  - name: guiFile
+    using:
+      manual_configuration:
+        remote_table:
+          schema: editor
+          name: file
+        column_mapping:
+          guiFileId: id
+  - name: jsFile
+    using:
+      manual_configuration:
+        remote_table:
+          schema: editor
+          name: file
+        column_mapping:
+          jsFileId: id
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - guiFileId
+      - jsFileId
+      - position
+      - created_at
+      - updated_at
+      - id
+      filter: {}
+  - role: guest-consumer
+    permission:
+      columns:
+      - guiFileId
+      - id
+      - jsFileId
+      - position
+      - created_at
+      - updated_at
+      filter: {}
+- table:
+    schema: editor
+    name: linkedFiles
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - records
+      filter: {}
+  - role: guest-consumer
+    permission:
+      columns:
+      - id
+      - records
+      filter: {}
+- table:
+    schema: editor
+    name: priorityFuncTable
+- table:
+    schema: editor
+    name: template
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - name
+      - route
+      - thumbnail
+      - type
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - id
+      - name
+      - route
+      - thumbnail
+      - type
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: fulfilment
     name: brand_recurrence
@@ -1514,6 +1718,14 @@
       update: updateIngredient
     custom_column_names: {}
   array_relationships:
+  - name: cartItemViews
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: cartItemView
+        column_mapping:
+          id: ingredientId
   - name: ingredientProcessings
     using:
       foreign_key_constraint_on:
@@ -1528,6 +1740,14 @@
         table:
           schema: ingredient
           name: ingredientSachet
+  - name: ingredientSachetViews
+    using:
+      manual_configuration:
+        remote_table:
+          schema: ingredient
+          name: ingredientSachetView
+        column_mapping:
+          id: ingredientId
   computed_fields:
   - name: isValid
     definition:
@@ -1555,6 +1775,14 @@
     using:
       foreign_key_constraint_on: processingName
   array_relationships:
+  - name: cartItemViews
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: cartItemView
+        column_mapping:
+          id: ingredientProcessingId
   - name: ingredientSachets
     using:
       foreign_key_constraint_on:
@@ -1562,6 +1790,17 @@
         table:
           schema: ingredient
           name: ingredientSachet
+  - name: ingredientSachetViews
+    using:
+      manual_configuration:
+        remote_table:
+          schema: ingredient
+          name: ingredientSachetView
+        column_mapping:
+          id: ingredientProcessingId
+- table:
+    schema: ingredient
+    name: ingredientProcessingView
 - table:
     schema: ingredient
     name: ingredientSacahet_recipeHubSachet
@@ -1591,6 +1830,21 @@
     using:
       foreign_key_constraint_on: unit
   array_relationships:
+  - name: cartItems
+    using:
+      foreign_key_constraint_on:
+        column: ingredientSachetId
+        table:
+          schema: order
+          name: cartItem
+  - name: cartItemViews
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: cartItemView
+        column_mapping:
+          id: ingredientSachetId
   - name: modeOfFulfillments
     using:
       foreign_key_constraint_on:
@@ -1598,13 +1852,6 @@
         table:
           schema: ingredient
           name: modeOfFulfillment
-  - name: orderSachets
-    using:
-      foreign_key_constraint_on:
-        column: ingredientSachetId
-        table:
-          schema: order
-          name: orderSachet
   - name: recipeYields
     using:
       foreign_key_constraint_on:
@@ -1631,6 +1878,56 @@
         schema: ingredient
         name: cost
     comment: ""
+  remote_relationships:
+  - definition:
+      remote_field:
+        matches_sachetIngredientSachetMatch_aggregate:
+          arguments:
+            where:
+              organizationIngredientSachetId:
+                _eq: $id
+      hasura_fields:
+      - id
+      remote_schema: dailycloak
+    name: recipehubSachetMatch
+  event_triggers:
+  - name: ingredientSachetModified
+    definition:
+      enable_manual: false
+      insert:
+        columns: '*'
+      delete:
+        columns: '*'
+      update:
+        columns:
+        - isArchived
+        - tracking
+        - visibility
+        - id
+        - ingredientId
+        - ingredientProcessingId
+        - liveMOF
+        - quantity
+        - unit
+        - createdAt
+        - updatedAt
+    retry_conf:
+      num_retries: 0
+      interval_sec: 10
+      timeout_sec: 60
+    webhook: https://8cb6ae38d5ed.ngrok.io/match/check
+- table:
+    schema: ingredient
+    name: ingredientSachetView
+  array_relationships:
+  - name: cartItemViews
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: cartItemView
+        column_mapping:
+          id: ingredientSachetId
 - table:
     schema: ingredient
     name: modeOfFulfillment
@@ -1697,16 +1994,15 @@
         columns:
         - isLive
         - isPublished
-        - priority
+        - position
     retry_conf:
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_MOF_UPDATE
+    webhook: '{{DAILYOS_SERVER_URL}}/api/mof/live'
 - table:
     schema: ingredient
     name: modeOfFulfillmentEnum
-  is_enum: true
 - table:
     schema: insights
     name: app_module_insight
@@ -1737,22 +2033,6 @@
           name: order
         column_mapping:
           date: created_at
-  - name: rewardHistories
-    using:
-      manual_configuration:
-        remote_table:
-          schema: crm
-          name: rewardHistoryView
-        column_mapping:
-          date: rewarddate
-  - name: viewRewardHistories2
-    using:
-      manual_configuration:
-        remote_table:
-          schema: crm
-          name: rewardHistoryView2
-        column_mapping:
-          date: rewarddate
 - table:
     schema: insights
     name: day
@@ -1764,26 +2044,9 @@
         table:
           schema: insights
           name: date
-  - name: rewardHistories
-    using:
-      manual_configuration:
-        remote_table:
-          schema: crm
-          name: rewardHistoryView
-        column_mapping:
-          dayNumber: rewardday
 - table:
     schema: insights
     name: hour
-  array_relationships:
-  - name: rewardHistories
-    using:
-      manual_configuration:
-        remote_table:
-          schema: crm
-          name: rewardHistoryView
-        column_mapping:
-          hour: rewardhour
 - table:
     schema: insights
     name: insights
@@ -1808,58 +2071,7 @@
           name: chart
 - table:
     schema: insights
-    name: inventory_product_transaction
-  object_relationships:
-  - name: inventoryProduct
-    using:
-      manual_configuration:
-        remote_table:
-          schema: products
-          name: inventoryProduct
-        column_mapping:
-          inventoryProductId: id
-- table:
-    schema: insights
-    name: mealkit_product_transaction
-- table:
-    schema: insights
     name: month
-  array_relationships:
-  - name: rewardHistories
-    using:
-      manual_configuration:
-        remote_table:
-          schema: crm
-          name: rewardHistoryView
-        column_mapping:
-          number: rewardmonth
-- table:
-    schema: insights
-    name: ready_to_eat_product_transaction
-- table:
-    schema: insights
-    name: simple_recipe_sale_meal_kit
-  object_relationships:
-  - name: recipe
-    using:
-      manual_configuration:
-        remote_table:
-          schema: simpleRecipe
-          name: simpleRecipe
-        column_mapping:
-          simpleRecipeId: id
-- table:
-    schema: insights
-    name: simple_recipe_sale_ready_to_eat
-  object_relationships:
-  - name: recipe
-    using:
-      manual_configuration:
-        remote_table:
-          schema: simpleRecipe
-          name: simpleRecipe
-        column_mapping:
-          simpleRecipeId: id
 - table:
     schema: insights
     name: test
@@ -1887,6 +2099,48 @@
           name: customer
         column_mapping:
           source: source
+- table:
+    schema: instructions
+    name: instructionSet
+  configuration:
+    custom_root_fields:
+      insert: createInstructionSets
+      select_aggregate: instructionSetsAggregate
+      insert_one: createInstructionSet
+      select_by_pk: instructionSet
+      select: instructionSets
+      delete: deleteInstructionSets
+      update: updateInstructionSets
+      delete_by_pk: deleteInstructionSet
+      update_by_pk: updateInstructionSet
+    custom_column_names: {}
+  object_relationships:
+  - name: simpleRecipe
+    using:
+      foreign_key_constraint_on: simpleRecipeId
+  array_relationships:
+  - name: instructionSteps
+    using:
+      foreign_key_constraint_on:
+        column: instructionSetId
+        table:
+          schema: instructions
+          name: instructionStep
+- table:
+    schema: instructions
+    name: instructionStep
+  configuration:
+    custom_root_fields:
+      insert: createInstructionSteps
+      select_aggregate: instructionStepsAggregate
+      insert_one: createInstructionStep
+      select_by_pk: instructionStep
+      select: instructionSteps
+      delete: deleteInstructionSteps
+      update: updateInstructionSteps
+      delete_by_pk: deleteInstructionStep
+      update_by_pk: updateInstructionStep
+    custom_column_names: {}
 - table:
     schema: inventory
     name: bulkItem
@@ -1917,6 +2171,13 @@
         table:
           schema: inventory
           name: bulkItemHistory
+  - name: bulkItem_unitConversions
+    using:
+      foreign_key_constraint_on:
+        column: entityId
+        table:
+          schema: inventory
+          name: bulkItem_unitConversion
   - name: modeOfFulfillments
     using:
       foreign_key_constraint_on:
@@ -1924,13 +2185,6 @@
         table:
           schema: ingredient
           name: modeOfFulfillment
-  - name: orderSachets
-    using:
-      foreign_key_constraint_on:
-        column: bulkItemId
-        table:
-          schema: order
-          name: orderSachet
   - name: purchaseOrderItems
     using:
       foreign_key_constraint_on:
@@ -1979,13 +2233,13 @@
       enable_manual: false
       update:
         columns:
-        - onHand
         - isAvailable
+        - onHand
     retry_conf:
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_BULK_ITEM_UPDATE
+    webhook: '{{DAILYOS_SERVER_URL}}/api/mof/update'
 - table:
     schema: inventory
     name: bulkItemHistory
@@ -2005,9 +2259,6 @@
   - name: bulkWorkOrder
     using:
       foreign_key_constraint_on: bulkWorkOrderId
-  - name: orderSachet
-    using:
-      foreign_key_constraint_on: orderSachetId
   - name: purchaseOrderItem
     using:
       foreign_key_constraint_on: purchaseOrderItemId
@@ -2038,7 +2289,20 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_BULK_ITEM_HISTORY_UPSERT
+    webhook: '{{DAILYOS_SERVER_URL}}/api/inventory/bulk-item-history-upsert'
+- table:
+    schema: inventory
+    name: bulkItemView
+- table:
+    schema: inventory
+    name: bulkItem_unitConversion
+  object_relationships:
+  - name: bulkItem
+    using:
+      foreign_key_constraint_on: entityId
+  - name: unitConversion
+    using:
+      foreign_key_constraint_on: unitConversionId
 - table:
     schema: inventory
     name: bulkWorkOrder
@@ -2098,7 +2362,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_BULK_WORK_ORDER_HISTORY_UPSERT
+    webhook: '{{DAILYOS_SERVER_URL}}/api/inventory/bulk-work-order-upsert'
 - table:
     schema: inventory
     name: packagingHistory
@@ -2127,7 +2391,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_PACKAGING_HISTORY_UPSERT
+    webhook: '{{DAILYOS_SERVER_URL}}/api/inventory/packaging-history-upsert'
 - table:
     schema: inventory
     name: purchaseOrderItem
@@ -2184,7 +2448,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_PURCHASE_ORDER_ITEM_UPSERT
+    webhook: '{{DAILYOS_SERVER_URL}}/api/inventory/purchase-order-upsert'
 - table:
     schema: inventory
     name: sachetItem
@@ -2205,13 +2469,6 @@
     using:
       foreign_key_constraint_on: unit
   array_relationships:
-  - name: inventoryProducts
-    using:
-      foreign_key_constraint_on:
-        column: sachetItemId
-        table:
-          schema: products
-          name: inventoryProduct
   - name: modeOfFulfillments
     using:
       foreign_key_constraint_on:
@@ -2219,13 +2476,6 @@
         table:
           schema: ingredient
           name: modeOfFulfillment
-  - name: orderSachets
-    using:
-      foreign_key_constraint_on:
-        column: sachetItemId
-        table:
-          schema: order
-          name: orderSachet
   - name: sachetItemHistories
     using:
       foreign_key_constraint_on:
@@ -2240,7 +2490,59 @@
         table:
           schema: inventory
           name: sachetWorkOrder
+  remote_relationships:
+  - definition:
+      remote_field:
+        matches_ingredientSachetItemMatch_aggregate:
+          arguments:
+            where:
+              organizationSachetItemId:
+                _eq: $id
+      hasura_fields:
+      - id
+      remote_schema: dailycloak
+    name: recipehubIngredientMatch
+  - definition:
+      remote_field:
+        matches_sachetSachetItemMatch_aggregate:
+          arguments:
+            where:
+              organizationSachetItemId:
+                _eq: $id
+      hasura_fields:
+      - id
+      remote_schema: dailycloak
+    name: recipehubSachetMatch
   event_triggers:
+  - name: sachetItemModified
+    definition:
+      enable_manual: true
+      insert:
+        columns: '*'
+      delete:
+        columns: '*'
+      update:
+        columns:
+        - isArchived
+        - isAvailable
+        - bulkItemId
+        - id
+        - awaiting
+        - committed
+        - consumed
+        - maxLevel
+        - onHand
+        - parLevel
+        - unitSize
+        - unit
+    retry_conf:
+      num_retries: 0
+      interval_sec: 10
+      timeout_sec: 60
+    webhook: https://8cb6ae38d5ed.ngrok.io/match/check
+    headers:
+    - name: organizationid
+      value_from_env: HEADER_REMOTE_SCHEMA_ORGANIZATIONID
   - name: sachetItemUpdate
     definition:
       enable_manual: false
@@ -2252,7 +2554,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_BULK_ITEM_UPDATE
+    webhook: '{{DAILYOS_SERVER_URL}}/api/mof/update'
 - table:
     schema: inventory
     name: sachetItemHistory
@@ -2266,9 +2568,6 @@
       update: updateSachetItemHistory
     custom_column_names: {}
   object_relationships:
-  - name: orderSachet
-    using:
-      foreign_key_constraint_on: orderSachetId
   - name: sachetItem
     using:
       foreign_key_constraint_on: sachetItemId
@@ -2297,7 +2596,19 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_SACHET_HISTORY_UPSERT
+    webhook: '{{DAILYOS_SERVER_URL}}/api/inventory/sachet-item-history-upsert'
+- table:
+    schema: inventory
+    name: sachetItemView
+  array_relationships:
+  - name: cartItemViews
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: cartItemView
+        column_mapping:
+          id: sachetItemId
 - table:
     schema: inventory
     name: sachetWorkOrder
@@ -2364,7 +2675,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_SACHET_WORK_ORDER_UPSERT
+    webhook: '{{DAILYOS_SERVER_URL}}/api/inventory/sachet-work-order-upsert'
 - table:
     schema: inventory
     name: supplier
@@ -2448,6 +2759,81 @@
         table:
           schema: inventory
           name: purchaseOrderItem
+  computed_fields:
+  - name: unit_conversions
+    definition:
+      function:
+        schema: inventory
+        name: unit_conversions_supplier_item
+    comment: ""
+  remote_relationships:
+  - definition:
+      remote_field:
+        matches_ingredientSupplierItemMatch_aggregate:
+          arguments:
+            where:
+              organizationSupplierItemId:
+                _eq: $id
+      hasura_fields:
+      - id
+      remote_schema: dailycloak
+    name: recipehubIngredientMatch
+  - definition:
+      remote_field:
+        matches_sachetSupplierItemMatch_aggregate:
+          arguments:
+            where:
+              organizationSupplierItemId:
+                _eq: $id
+      hasura_fields:
+      - id
+      remote_schema: dailycloak
+    name: recipehubSachetMatch
+  event_triggers:
+  - name: supplierItemModified
+    definition:
+      enable_manual: true
+      insert:
+        columns: '*'
+      delete:
+        columns: '*'
+      update:
+        columns:
+        - isArchived
+        - bulkItemAsShippedId
+        - id
+        - importId
+        - supplierId
+        - unitSize
+        - certificates
+        - leadTime
+        - prices
+        - name
+        - sku
+        - unit
+    retry_conf:
+      num_retries: 0
+      interval_sec: 10
+      timeout_sec: 60
+    webhook: https://8cb6ae38d5ed.ngrok.io/match/check
+    headers:
+    - name: organizationid
+      value_from_env: HEADER_REMOTE_SCHEMA_ORGANIZATIONID
+- table:
+    schema: inventory
+    name: supplierItemView
+  object_relationships:
+  - name: supplier
+    using:
+      manual_configuration:
+        remote_table:
+          schema: inventory
+          name: supplier
+        column_mapping:
+          supplierId: id
+- table:
+    schema: inventory
+    name: supplierItem_unitConversion
 - table:
     schema: inventory
     name: unitConversionByBulkItem
@@ -2564,6 +2950,14 @@
         table:
           schema: onDemand
           name: collection_productCategory
+  - name: subscriptionOccurenceAddOnProducts
+    using:
+      manual_configuration:
+        remote_table:
+          schema: subscription
+          name: subscriptionOccurence_addOn
+        column_mapping:
+          name: productCategory
   - name: subscriptionOccurenceProducts
     using:
       foreign_key_constraint_on:
@@ -2619,13 +3013,6 @@
         table:
           schema: master
           name: unitConversion
-  - name: orderSachets
-    using:
-      foreign_key_constraint_on:
-        column: unit
-        table:
-          schema: order
-          name: orderSachet
   - name: outputUnitConversions
     using:
       foreign_key_constraint_on:
@@ -2674,6 +3061,13 @@
     using:
       foreign_key_constraint_on: inputUnitName
   array_relationships:
+  - name: bulkItem_unitConversions
+    using:
+      foreign_key_constraint_on:
+        column: unitConversionId
+        table:
+          schema: inventory
+          name: bulkItem_unitConversion
   - name: unitConversionByBulkItems
     using:
       foreign_key_constraint_on:
@@ -2803,7 +3197,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_CREATE_NOTIFICATION_TRIGGER
+    webhook: '{{DAILYOS_SERVER_URL}}/webhook/notification/trigger'
 - table:
     schema: onDemand
     name: brand_collection
@@ -2929,31 +3323,27 @@
   - name: collection_productCategory
     using:
       foreign_key_constraint_on: collection_productCategoryId
-  - name: comboProduct
+  - name: product
     using:
-      foreign_key_constraint_on: comboProductId
-  - name: customizableProduct
-    using:
-      foreign_key_constraint_on: customizableProductId
-  - name: inventoryProduct
-    using:
-      foreign_key_constraint_on: inventoryProductId
-  - name: simpleRecipeProduct
-    using:
-      foreign_key_constraint_on: simpleRecipeProductId
-  computed_fields:
-  - name: data
-    definition:
-      function:
-        schema: onDemand
-        name: getProductDetails
-    comment: ""
+      foreign_key_constraint_on: productId
 - table:
     schema: onDemand
     name: menu
-- table:
-    schema: onDemand
-    name: menuData
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - data
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - id
+      - data
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: onDemand
     name: modifier
@@ -2970,23 +3360,997 @@
       update_by_pk: updateModifier
     custom_column_names: {}
   array_relationships:
-  - name: inventoryProductOptions
+  - name: categories
     using:
       foreign_key_constraint_on:
-        column: modifierId
+        column: modifierTemplateId
         table:
-          schema: products
-          name: inventoryProductOption
-  - name: simpleRecipeProductOptions
+          schema: onDemand
+          name: modifierCategory
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - name
+      - importHistoryId
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - id
+      - importHistoryId
+      - name
+      filter: {}
+      allow_aggregations: true
+- table:
+    schema: onDemand
+    name: modifierCategory
+  object_relationships:
+  - name: modifierTemplate
+    using:
+      foreign_key_constraint_on: modifierTemplateId
+  array_relationships:
+  - name: options
     using:
       foreign_key_constraint_on:
-        column: modifierId
+        column: modifierCategoryId
         table:
-          schema: products
-          name: simpleRecipeProductOption
+          schema: onDemand
+          name: modifierCategoryOption
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - name
+      - type
+      - isVisible
+      - isRequired
+      - limits
+      - modifierTemplateId
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - isRequired
+      - isVisible
+      - id
+      - modifierTemplateId
+      - limits
+      - name
+      - type
+      filter: {}
+      allow_aggregations: true
+- table:
+    schema: onDemand
+    name: modifierCategoryOption
+  object_relationships:
+  - name: ingredientSachet
+    using:
+      foreign_key_constraint_on: ingredientSachetId
+  - name: modifierCategory
+    using:
+      foreign_key_constraint_on: modifierCategoryId
+  - name: sachetItem
+    using:
+      foreign_key_constraint_on: sachetItemId
+  - name: supplierItem
+    using:
+      foreign_key_constraint_on: supplierItemId
+  computed_fields:
+  - name: cartItem
+    definition:
+      function:
+        schema: onDemand
+        name: modifierCategoryOptionCartItem
+    comment: ""
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - name
+      - originalName
+      - price
+      - discount
+      - quantity
+      - image
+      - isActive
+      - isVisible
+      - operationConfigId
+      - modifierCategoryId
+      - sachetItemId
+      - supplierItemId
+      - ingredientSachetId
+      computed_fields:
+      - cartItem
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - isActive
+      - isVisible
+      - id
+      - ingredientSachetId
+      - modifierCategoryId
+      - operationConfigId
+      - quantity
+      - sachetItemId
+      - supplierItemId
+      - discount
+      - price
+      - image
+      - name
+      - originalName
+      computed_fields:
+      - cartItem
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: onDemand
     name: storeData
+- table:
+    schema: order
+    name: cart
+  configuration:
+    custom_root_fields:
+      insert: createCarts
+      select_aggregate: cartsAggregate
+      insert_one: createCart
+      select_by_pk: cart
+      select: carts
+      delete: deleteCarts
+      update: updateCarts
+      delete_by_pk: deleteCart
+      update_by_pk: updateCart
+    custom_column_names: {}
+  object_relationships:
+  - name: brand
+    using:
+      manual_configuration:
+        remote_table:
+          schema: brands
+          name: brand
+        column_mapping:
+          brandId: id
+  - name: order
+    using:
+      foreign_key_constraint_on: orderId
+  - name: orderStatus
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: orderStatusEnum
+        column_mapping:
+          status: value
+  - name: subscriptionOccurenceCustomer
+    using:
+      manual_configuration:
+        remote_table:
+          schema: subscription
+          name: subscriptionOccurence_customer
+        column_mapping:
+          id: cartId
+  array_relationships:
+  - name: cartItems
+    using:
+      foreign_key_constraint_on:
+        column: cartId
+        table:
+          schema: order
+          name: cartItem
+  - name: cartItemViews
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: cartItemView
+        column_mapping:
+          id: cartId
+  computed_fields:
+  - name: addOnTotal
+    definition:
+      function:
+        schema: order
+        name: addOnTotal
+    comment: ""
+  - name: itemTotal
+    definition:
+      function:
+        schema: order
+        name: itemTotal
+    comment: ""
+  - name: subTotal
+    definition:
+      function:
+        schema: order
+        name: subTotal
+    comment: ""
+  - name: billingDetails
+    definition:
+      function:
+        schema: order
+        name: cartBillingDetails
+    comment: ""
+  - name: totalPrice
+    definition:
+      function:
+        schema: order
+        name: totalPrice
+    comment: ""
+  - name: tax
+    definition:
+      function:
+        schema: order
+        name: tax
+    comment: ""
+  - name: taxPercent
+    definition:
+      function:
+        schema: order
+        name: taxPercent
+    comment: ""
+  - name: deliveryPrice
+    definition:
+      function:
+        schema: order
+        name: deliveryPrice
+    comment: ""
+  - name: discount
+    definition:
+      function:
+        schema: order
+        name: discount
+    comment: ""
+  - name: isCartValid
+    definition:
+      function:
+        schema: order
+        name: isCartValid
+    comment: ""
+  - name: walletAmountUsable
+    definition:
+      function:
+        schema: order
+        name: walletAmountUsable
+    comment: ""
+  - name: loyaltyPointsUsable
+    definition:
+      function:
+        schema: order
+        name: loyaltyPointsUsable
+    comment: ""
+  remote_relationships:
+  - definition:
+      remote_field:
+        paymentHub_payment:
+          arguments:
+            where:
+              customerKeycloakId:
+                _eq: $customerKeycloakId
+      hasura_fields:
+      - customerKeycloakId
+      remote_schema: dailycloak
+    name: attemptedPayments
+  - definition:
+      remote_field:
+        paymentHub_payment_by_pk:
+          arguments:
+            id: $paymentId
+      hasura_fields:
+      - paymentId
+      remote_schema: dailycloak
+    name: payment
+  - definition:
+      remote_field:
+        platform_stripePaymentMethod:
+          arguments:
+            stripePaymentMethodId: $paymentMethodId
+      hasura_fields:
+      - paymentMethodId
+      remote_schema: dailykey
+    name: paymentCart
+  insert_permissions:
+  - role: consumer
+    permission:
+      check: {}
+      set:
+        brandId: x-hasura-Brand-Id
+        customerKeycloakId: x-hasura-Keycloak-Id
+        source: x-hasura-Source
+      columns:
+      - address
+      - brandId
+      - couponDiscount
+      - customerId
+      - customerInfo
+      - customerKeycloakId
+      - fulfillmentInfo
+      - isTest
+      - loyaltyPointsUsed
+      - orderId
+      - paidPrice
+      - paymentId
+      - paymentMethodId
+      - paymentRequestInfo
+      - paymentStatus
+      - status
+      - stripeCustomerId
+      - subscriptionOccurenceId
+      - tip
+      - transactionId
+      - walletAmountUsed
+      backend_only: false
+  - role: guest-consumer
+    permission:
+      check: {}
+      set:
+        brandId: x-hasura-Brand-Id
+        source: x-hasura-Source
+      columns:
+      - address
+      - brandId
+      - couponDiscount
+      - customerInfo
+      - fulfillmentInfo
+      - isTest
+      - loyaltyPointsUsed
+      - paidPrice
+      - paymentId
+      - paymentMethodId
+      - paymentRequestInfo
+      - paymentStatus
+      - status
+      - stripeCustomerId
+      - subscriptionOccurenceId
+      - tip
+      - transactionId
+      - walletAmountUsed
+      backend_only: false
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - isTest
+      - brandId
+      - customerId
+      - id
+      - loyaltyPointsUsed
+      - orderId
+      - subscriptionOccurenceId
+      - address
+      - customerInfo
+      - fulfillmentInfo
+      - paymentRequestInfo
+      - amount
+      - couponDiscount
+      - paidPrice
+      - tip
+      - walletAmountUsed
+      - customerKeycloakId
+      - paymentMethodId
+      - paymentStatus
+      - source
+      - status
+      - stripeCustomerId
+      - transactionId
+      - created_at
+      - paymentUpdatedAt
+      - updated_at
+      - paymentId
+      computed_fields:
+      - addOnTotal
+      - billingDetails
+      - deliveryPrice
+      - discount
+      - isCartValid
+      - itemTotal
+      - loyaltyPointsUsable
+      - subTotal
+      - tax
+      - taxPercent
+      - totalPrice
+      - walletAmountUsable
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - address
+      - amount
+      - brandId
+      - couponDiscount
+      - created_at
+      - customerId
+      - customerInfo
+      - customerKeycloakId
+      - fulfillmentInfo
+      - id
+      - isTest
+      - loyaltyPointsUsed
+      - orderId
+      - paidPrice
+      - paymentId
+      - paymentMethodId
+      - paymentRequestInfo
+      - paymentStatus
+      - paymentUpdatedAt
+      - source
+      - status
+      - stripeCustomerId
+      - subscriptionOccurenceId
+      - tip
+      - transactionId
+      - updated_at
+      - walletAmountUsed
+      computed_fields:
+      - addOnTotal
+      - billingDetails
+      - deliveryPrice
+      - discount
+      - isCartValid
+      - itemTotal
+      - loyaltyPointsUsable
+      - subTotal
+      - tax
+      - taxPercent
+      - totalPrice
+      - walletAmountUsable
+      filter: {}
+      allow_aggregations: true
+  update_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - address
+      - amount
+      - couponDiscount
+      - customerId
+      - customerInfo
+      - customerKeycloakId
+      - fulfillmentInfo
+      - id
+      - isTest
+      - loyaltyPointsUsed
+      - paidPrice
+      - paymentId
+      - paymentMethodId
+      - stripeCustomerId
+      - subscriptionOccurenceId
+      - tip
+      - walletAmountUsed
+      filter: {}
+      check: null
+      set:
+        customerKeycloakId: x-hasura-Keycloak-Id
+  delete_permissions:
+  - role: consumer
+    permission:
+      filter: {}
+  event_triggers:
+  - name: initiatePayment
+    definition:
+      enable_manual: false
+      update:
+        columns:
+        - status
+    retry_conf:
+      num_retries: 0
+      interval_sec: 10
+      timeout_sec: 60
+    webhook: '{{DAILYOS_SERVER_URL}}/api/initiate-payment'
+  - name: printKOT
+    definition:
+      enable_manual: true
+      update:
+        columns:
+        - status
+    retry_conf:
+      num_retries: 0
+      interval_sec: 10
+      timeout_sec: 60
+    webhook: '{{DAILYOS_SERVER_URL}}/event/print-kot'
+  - name: sendEmailOnOrderCartStatusChange
+    definition:
+      enable_manual: false
+      update:
+        columns:
+        - paymentStatus
+        - status
+    retry_conf:
+      num_retries: 0
+      interval_sec: 10
+      timeout_sec: 60
+    webhook: '{{DAILYOS_SERVER_URL}}/api/order/status'
+- table:
+    schema: order
+    name: cartItem
+  configuration:
+    custom_root_fields:
+      insert: createCartItems
+      select_aggregate: cartItemsAggregate
+      insert_one: createCartItem
+      select_by_pk: cartItem
+      select: cartItems
+      delete: deleteCartItems
+      update: updateCartItems
+      delete_by_pk: deleteCartItem
+      update_by_pk: updateCartItem
+    custom_column_names: {}
+  object_relationships:
+  - name: cart
+    using:
+      foreign_key_constraint_on: cartId
+  - name: comboProductComponent
+    using:
+      foreign_key_constraint_on: comboProductComponentId
+  - name: customizableProductComponent
+    using:
+      foreign_key_constraint_on: customizableProductComponentId
+  - name: ingredientSachet
+    using:
+      foreign_key_constraint_on: ingredientSachetId
+  - name: labelTemplate
+    using:
+      foreign_key_constraint_on: labelTemplateId
+  - name: parent
+    using:
+      foreign_key_constraint_on: parentCartItemId
+  - name: product
+    using:
+      foreign_key_constraint_on: productId
+  - name: productOption
+    using:
+      foreign_key_constraint_on: productOptionId
+  - name: sachetItem
+    using:
+      foreign_key_constraint_on: sachetItemId
+  - name: simpleRecipeYield
+    using:
+      foreign_key_constraint_on: simpleRecipeYieldId
+  - name: subscriptionOccurenceProduct
+    using:
+      foreign_key_constraint_on: subscriptionOccurenceProductId
+  array_relationships:
+  - name: childs
+    using:
+      foreign_key_constraint_on:
+        column: parentCartItemId
+        table:
+          schema: order
+          name: cartItem
+  - name: products
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: cartItemView
+        column_mapping:
+          productId: productId
+  insert_permissions:
+  - role: consumer
+    permission:
+      check: {}
+      set:
+        cartId: x-hasura-Cart-Id
+      columns:
+      - accuracy
+      - addOnLabel
+      - addOnPrice
+      - comboProductComponentId
+      - created_at
+      - customizableProductComponentId
+      - ingredientSachetId
+      - instructionCardTemplateId
+      - inventoryProductBundleId
+      - isAddOn
+      - isAutoAdded
+      - isModifier
+      - labelTemplateId
+      - modifierOptionId
+      - packagingId
+      - parentCartItemId
+      - position
+      - productId
+      - productOptionId
+      - refundPrice
+      - sachetItemId
+      - simpleRecipeYieldId
+      - stationId
+      - status
+      - subRecipeYieldId
+      - subscriptionOccurenceAddOnProductId
+      - subscriptionOccurenceProductId
+      - unitPrice
+      - updated_at
+      backend_only: false
+  - role: guest-consumer
+    permission:
+      check: {}
+      set:
+        cartId: x-hasura-Cart-Id
+      columns:
+      - accuracy
+      - addOnLabel
+      - addOnPrice
+      - comboProductComponentId
+      - customizableProductComponentId
+      - ingredientSachetId
+      - instructionCardTemplateId
+      - inventoryProductBundleId
+      - isAddOn
+      - isAutoAdded
+      - isModifier
+      - labelTemplateId
+      - modifierOptionId
+      - packagingId
+      - parentCartItemId
+      - position
+      - productId
+      - productOptionId
+      - refundPrice
+      - sachetItemId
+      - simpleRecipeYieldId
+      - stationId
+      - status
+      - subRecipeYieldId
+      - subscriptionOccurenceAddOnProductId
+      - subscriptionOccurenceProductId
+      - unitPrice
+      backend_only: false
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - accuracy
+      - addOnLabel
+      - addOnPrice
+      - cartId
+      - comboProductComponentId
+      - created_at
+      - customizableProductComponentId
+      - id
+      - ingredientSachetId
+      - instructionCardTemplateId
+      - inventoryProductBundleId
+      - isAddOn
+      - isAutoAdded
+      - isModifier
+      - labelTemplateId
+      - modifierOptionId
+      - packagingId
+      - parentCartItemId
+      - position
+      - productId
+      - productOptionId
+      - refundPrice
+      - sachetItemId
+      - simpleRecipeYieldId
+      - stationId
+      - status
+      - subRecipeYieldId
+      - subscriptionOccurenceAddOnProductId
+      - subscriptionOccurenceProductId
+      - unitPrice
+      - updated_at
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - accuracy
+      - addOnLabel
+      - addOnPrice
+      - cartId
+      - comboProductComponentId
+      - created_at
+      - customizableProductComponentId
+      - id
+      - ingredientSachetId
+      - instructionCardTemplateId
+      - inventoryProductBundleId
+      - isAddOn
+      - isAutoAdded
+      - isModifier
+      - labelTemplateId
+      - modifierOptionId
+      - packagingId
+      - parentCartItemId
+      - position
+      - productId
+      - productOptionId
+      - refundPrice
+      - sachetItemId
+      - simpleRecipeYieldId
+      - stationId
+      - status
+      - subRecipeYieldId
+      - subscriptionOccurenceAddOnProductId
+      - subscriptionOccurenceProductId
+      - unitPrice
+      - updated_at
+      filter: {}
+      allow_aggregations: true
+  update_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - accuracy
+      - addOnLabel
+      - addOnPrice
+      - cartId
+      - comboProductComponentId
+      - created_at
+      - customizableProductComponentId
+      - id
+      - ingredientSachetId
+      - instructionCardTemplateId
+      - inventoryProductBundleId
+      - isAddOn
+      - isAutoAdded
+      - isModifier
+      - labelTemplateId
+      - modifierOptionId
+      - packagingId
+      - parentCartItemId
+      - position
+      - productId
+      - productOptionId
+      - refundPrice
+      - sachetItemId
+      - simpleRecipeYieldId
+      - stationId
+      - status
+      - subRecipeYieldId
+      - subscriptionOccurenceAddOnProductId
+      - subscriptionOccurenceProductId
+      - unitPrice
+      - updated_at
+      filter: {}
+      check: null
+  - role: guest-consumer
+    permission:
+      columns:
+      - accuracy
+      - addOnLabel
+      - addOnPrice
+      - comboProductComponentId
+      - customizableProductComponentId
+      - ingredientSachetId
+      - instructionCardTemplateId
+      - inventoryProductBundleId
+      - isAddOn
+      - isAutoAdded
+      - isModifier
+      - labelTemplateId
+      - modifierOptionId
+      - packagingId
+      - parentCartItemId
+      - position
+      - productId
+      - productOptionId
+      - refundPrice
+      - sachetItemId
+      - simpleRecipeYieldId
+      - stationId
+      - status
+      - subRecipeYieldId
+      - subscriptionOccurenceAddOnProductId
+      - subscriptionOccurenceProductId
+      - unitPrice
+      filter:
+        cartId:
+          _eq: X-Hasura-Cart-Id
+      check: null
+  delete_permissions:
+  - role: consumer
+    permission:
+      filter:
+        cartId:
+          _eq: X-Hasura-Cart-Id
+  - role: guest-consumer
+    permission:
+      filter:
+        cartId:
+          _eq: X-Hasura-Cart-Id
+  event_triggers:
+  - name: printLabel
+    definition:
+      enable_manual: true
+      update:
+        columns:
+        - status
+    retry_conf:
+      num_retries: 0
+      interval_sec: 10
+      timeout_sec: 60
+    webhook: '{{DAILYOS_SERVER_URL}}/event/print-label'
+- table:
+    schema: order
+    name: cartItemView
+  object_relationships:
+  - name: bulkItem
+    using:
+      manual_configuration:
+        remote_table:
+          schema: inventory
+          name: bulkItemView
+        column_mapping:
+          bulkItemId: id
+  - name: cart
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: cart
+        column_mapping:
+          cartId: id
+  - name: operationConfig
+    using:
+      manual_configuration:
+        remote_table:
+          schema: settings
+          name: operationConfig
+        column_mapping:
+          operationConfigId: id
+  - name: parent
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: cartItemView
+        column_mapping:
+          parentCartItemId: id
+  - name: product
+    using:
+      manual_configuration:
+        remote_table:
+          schema: products
+          name: product
+        column_mapping:
+          productId: id
+  - name: productOption
+    using:
+      manual_configuration:
+        remote_table:
+          schema: products
+          name: productOption
+        column_mapping:
+          productOptionId: id
+  - name: supplierItem
+    using:
+      manual_configuration:
+        remote_table:
+          schema: inventory
+          name: supplierItemView
+        column_mapping:
+          supplierItemId: id
+  array_relationships:
+  - name: childs
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: cartItemView
+        column_mapping:
+          id: parentCartItemId
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - accuracy
+      - addOnLabel
+      - addOnPrice
+      - bulkItemId
+      - cartId
+      - cartItemType
+      - comboProductComponentId
+      - count
+      - created_at
+      - customizableProductComponentId
+      - displayBulkDensity
+      - displayImage
+      - displayName
+      - displayServing
+      - displayUnit
+      - displayUnitQuantity
+      - id
+      - ingredientId
+      - ingredientProcessingId
+      - ingredientSachetId
+      - instructionCardTemplateId
+      - inventoryProductBundleId
+      - isAddOn
+      - isAutoAdded
+      - isModifier
+      - labelTemplateId
+      - level
+      - levelType
+      - operationConfigId
+      - orderMode
+      - packagingId
+      - parentCartItemId
+      - path
+      - position
+      - processingName
+      - productId
+      - productOptionId
+      - productOptionType
+      - refundPrice
+      - rootCartItemId
+      - sachetItemId
+      - simpleRecipeYieldId
+      - stationId
+      - status
+      - subRecipeYieldId
+      - subscriptionOccurenceAddOnProductId
+      - subscriptionOccurenceProductId
+      - supplierItemId
+      - unitPrice
+      - updated_at
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - accuracy
+      - addOnLabel
+      - addOnPrice
+      - bulkItemId
+      - cartId
+      - cartItemType
+      - comboProductComponentId
+      - count
+      - created_at
+      - customizableProductComponentId
+      - displayBulkDensity
+      - displayImage
+      - displayName
+      - displayServing
+      - displayUnit
+      - displayUnitQuantity
+      - id
+      - ingredientId
+      - ingredientProcessingId
+      - ingredientSachetId
+      - instructionCardTemplateId
+      - inventoryProductBundleId
+      - isAddOn
+      - isAutoAdded
+      - isModifier
+      - labelTemplateId
+      - level
+      - levelType
+      - operationConfigId
+      - orderMode
+      - packagingId
+      - parentCartItemId
+      - path
+      - position
+      - processingName
+      - productId
+      - productOptionId
+      - productOptionType
+      - refundPrice
+      - rootCartItemId
+      - sachetItemId
+      - simpleRecipeYieldId
+      - stationId
+      - subRecipeYieldId
+      - subscriptionOccurenceAddOnProductId
+      - subscriptionOccurenceProductId
+      - supplierItemId
+      - unitPrice
+      - updated_at
+      filter:
+        cartId:
+          _eq: X-Hasura-Cart-Id
+      allow_aggregations: true
 - table:
     schema: order
     name: order
@@ -3003,23 +4367,12 @@
       update_by_pk: updateOrder
     custom_column_names: {}
   object_relationships:
-  - name: brand
+  - name: cart
     using:
-      foreign_key_constraint_on: brandId
-  - name: customer
-    using:
-      foreign_key_constraint_on: keycloakId
+      foreign_key_constraint_on: cartId
   - name: deliveryService
     using:
       foreign_key_constraint_on: deliveryPartnershipId
-  - name: orderCart
-    using:
-      manual_configuration:
-        remote_table:
-          schema: crm
-          name: orderCart
-        column_mapping:
-          id: orderId
   - name: orderDate
     using:
       manual_configuration:
@@ -3032,27 +4385,6 @@
     using:
       foreign_key_constraint_on: thirdPartyOrderId
   array_relationships:
-  - name: orderInventoryProducts
-    using:
-      foreign_key_constraint_on:
-        column: orderId
-        table:
-          schema: order
-          name: orderInventoryProduct
-  - name: orderMealKitProducts
-    using:
-      foreign_key_constraint_on:
-        column: orderId
-        table:
-          schema: order
-          name: orderMealKitProduct
-  - name: orderReadyToEatProducts
-    using:
-      foreign_key_constraint_on:
-        column: orderId
-        table:
-          schema: order
-          name: orderReadyToEatProduct
   - name: rewardHistories
     using:
       foreign_key_constraint_on:
@@ -3082,19 +4414,6 @@
     headers:
     - name: OrganizationId
       value_from_env: HEADER_REMOTE_SCHEMA_ORGANIZATIONID
-  - name: handleOrderStatus
-    definition:
-      enable_manual: true
-      update:
-        columns:
-        - isAccepted
-        - isRejected
-        - orderStatus
-    retry_conf:
-      num_retries: 0
-      interval_sec: 10
-      timeout_sec: 60
-    webhook_from_env: WEBHOOK_HANDLE_ORDER_STATUS
   - name: Order_Created
     definition:
       enable_manual: false
@@ -3104,440 +4423,33 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_DEFAULT_NOTIFICATION_HANDLER
-  - name: printKOT
-    definition:
-      enable_manual: true
-      update:
-        columns:
-        - orderStatus
-    retry_conf:
-      num_retries: 0
-      interval_sec: 10
-      timeout_sec: 60
-    webhook_from_env: WEBHOOK_PRINT_KOT
+    webhook: '{{DAILYOS_SERVER_URL}}/webhook/notification/manage'
 - table:
     schema: order
-    name: orderInventoryProduct
-  configuration:
-    custom_root_fields:
-      insert: createOrderInventoryProducts
-      select_aggregate: orderInventoryProductsAggregate
-      insert_one: createOrderInventoryProduct
-      select_by_pk: orderInventoryProduct
-      select: orderInventoryProducts
-      delete: deleteOrderInventoryProducts
-      update: updateOrderInventoryProducts
-      delete_by_pk: deleteOrderInventoryProduct
-      update_by_pk: updateOrderInventoryProduct
-    custom_column_names: {}
-  object_relationships:
-  - name: assemblyStation
-    using:
-      foreign_key_constraint_on: assemblyStationId
-  - name: comboProduct
-    using:
-      foreign_key_constraint_on: comboProductId
-  - name: comboProductComponent
-    using:
-      foreign_key_constraint_on: comboProductComponentId
-  - name: customizableProduct
-    using:
-      foreign_key_constraint_on: customizableProductId
-  - name: customizableProductOption
-    using:
-      foreign_key_constraint_on: customizableProductOptionId
-  - name: inventoryProduct
-    using:
-      foreign_key_constraint_on: inventoryProductId
-  - name: inventoryProductOption
-    using:
-      foreign_key_constraint_on: inventoryProductOptionId
-  - name: order
-    using:
-      foreign_key_constraint_on: orderId
-  - name: orderModifierRef
-    using:
-      foreign_key_constraint_on: orderModifierId
-  - name: packaging
-    using:
-      foreign_key_constraint_on: packagingId
+    name: orderMode
   array_relationships:
-  - name: orderModifiers
+  - name: productOptionTypes
     using:
       foreign_key_constraint_on:
-        column: orderInventoryProductId
+        column: orderMode
         table:
-          schema: order
-          name: orderModifier
-  - name: orderSachets
-    using:
-      manual_configuration:
-        remote_table:
-          schema: order
-          name: orderSachet
-        column_mapping:
-          id: orderInventoryProductId
-  computed_fields:
-  - name: hasModifiers
-    definition:
-      function:
-        schema: order
-        name: inventory_has_modifiers
-    comment: ""
-  event_triggers:
-  - name: printOrderInventoryProductLabel
-    definition:
-      enable_manual: true
-      update:
-        columns:
-        - assemblyStatus
-    retry_conf:
-      num_retries: 0
-      interval_sec: 10
-      timeout_sec: 60
-    webhook_from_env: WEBHOOK_PRINT_PRODUCT_LABEL
-- table:
-    schema: order
-    name: orderMealKitProduct
-  configuration:
-    custom_root_fields:
-      insert: createOrderMealKitProducts
-      select_aggregate: orderMealKitProductsAggregate
-      insert_one: createOrderMealKitProduct
-      select_by_pk: orderMealKitProduct
-      select: orderMealKitProducts
-      delete: deleteOrderMealKitProducts
-      update: updateOrderMealKitProducts
-      delete_by_pk: deleteOrderMealKitProduct
-      update_by_pk: updateOrderMealKitProduct
-    custom_column_names: {}
-  object_relationships:
-  - name: assemblyStation
-    using:
-      foreign_key_constraint_on: assemblyStationId
-  - name: comboProduct
-    using:
-      foreign_key_constraint_on: comboProductId
-  - name: comboProductComponent
-    using:
-      foreign_key_constraint_on: comboProductComponentId
-  - name: customizableProduct
-    using:
-      foreign_key_constraint_on: customizableProductId
-  - name: customizableProductOption
-    using:
-      foreign_key_constraint_on: customizableProductOptionId
-  - name: labelTemplate
-    using:
-      foreign_key_constraint_on: labelTemplateId
-  - name: order
-    using:
-      foreign_key_constraint_on: orderId
-  - name: orderModifierRef
-    using:
-      foreign_key_constraint_on: orderModifierId
-  - name: packaging
-    using:
-      foreign_key_constraint_on: packagingId
-  - name: simpleRecipeProduct
-    using:
-      foreign_key_constraint_on: simpleRecipeProductId
-  - name: simpleRecipeProductOption
-    using:
-      foreign_key_constraint_on: simpleRecipeProductOptionId
-  array_relationships:
-  - name: orderModifiers
-    using:
-      foreign_key_constraint_on:
-        column: orderMealKitProductId
-        table:
-          schema: order
-          name: orderModifier
-  - name: orderSachets
-    using:
-      foreign_key_constraint_on:
-        column: orderMealKitProductId
-        table:
-          schema: order
-          name: orderSachet
-  computed_fields:
-  - name: hasModifiers
-    definition:
-      function:
-        schema: order
-        name: mealkit_has_modifiers
-    comment: ""
-  event_triggers:
-  - name: printOrderMealKitProductLabel
-    definition:
-      enable_manual: true
-      update:
-        columns:
-        - assemblyStatus
-    retry_conf:
-      num_retries: 0
-      interval_sec: 10
-      timeout_sec: 60
-    webhook_from_env: WEBHOOK_PRINT_PRODUCT_LABEL
-- table:
-    schema: order
-    name: orderModifier
-  object_relationships:
-  - name: parentOrderInventoryProduct
-    using:
-      foreign_key_constraint_on: orderInventoryProductId
-  - name: parentOrderMealKitProduct
-    using:
-      foreign_key_constraint_on: orderMealKitProductId
-  - name: parentOrderReadyToEatProduct
-    using:
-      foreign_key_constraint_on: orderReadyToEatProductId
-  array_relationships:
-  - name: childOrderInventoryProducts
-    using:
-      foreign_key_constraint_on:
-        column: orderModifierId
-        table:
-          schema: order
-          name: orderInventoryProduct
-  - name: childOrderMealKitProducts
-    using:
-      foreign_key_constraint_on:
-        column: orderModifierId
-        table:
-          schema: order
-          name: orderMealKitProduct
-  - name: childOrderReadyToEatProducts
-    using:
-      foreign_key_constraint_on:
-        column: orderModifierId
-        table:
-          schema: order
-          name: orderReadyToEatProduct
-  event_triggers:
-  - name: handleOrderModifier
-    definition:
-      enable_manual: true
-      insert:
-        columns: '*'
-    retry_conf:
-      num_retries: 0
-      interval_sec: 10
-      timeout_sec: 60
-    webhook_from_env: WEBHOOK_HANDLE_ORDER_MODIFIER
-- table:
-    schema: order
-    name: orderReadyToEatProduct
-  configuration:
-    custom_root_fields:
-      insert: createOrderReadyToEatProducts
-      select_aggregate: orderReadyToEatProductsAggregate
-      insert_one: createOrderReadyToEatProduct
-      select_by_pk: orderReadyToEatProduct
-      select: orderReadyToEatProducts
-      delete: deleteOrderReadyToEatProducts
-      update: updateOrderReadyToEatProducts
-      delete_by_pk: deleteOrderReadyToEatProduct
-      update_by_pk: updateOrderReadyToEatProduct
-    custom_column_names: {}
-  object_relationships:
-  - name: assemblyStation
-    using:
-      foreign_key_constraint_on: assemblyStationId
-  - name: comboProduct
-    using:
-      foreign_key_constraint_on: comboProductId
-  - name: comboProductComponent
-    using:
-      foreign_key_constraint_on: comboProductComponentId
-  - name: customizableProduct
-    using:
-      foreign_key_constraint_on: customizableProductId
-  - name: customizableProductOption
-    using:
-      foreign_key_constraint_on: customizableProductOptionId
-  - name: labelTemplate
-    using:
-      foreign_key_constraint_on: labelTemplateId
-  - name: order
-    using:
-      foreign_key_constraint_on: orderId
-  - name: packaging
-    using:
-      foreign_key_constraint_on: packagingId
-  - name: simpleRecipe
-    using:
-      foreign_key_constraint_on: simpleRecipeId
-  - name: simpleRecipeProduct
-    using:
-      foreign_key_constraint_on: simpleRecipeProductId
-  - name: simpleRecipeProductOption
-    using:
-      foreign_key_constraint_on: simpleRecipeProductOptionId
-  array_relationships:
-  - name: orderModifiers
-    using:
-      foreign_key_constraint_on:
-        column: orderReadyToEatProductId
-        table:
-          schema: order
-          name: orderModifier
-  - name: orderSachets
-    using:
-      manual_configuration:
-        remote_table:
-          schema: order
-          name: orderSachet
-        column_mapping:
-          id: orderReadyToEatProductId
-  computed_fields:
-  - name: hasModifiers
-    definition:
-      function:
-        schema: order
-        name: readytoeat_has_modifiers
-    comment: ""
-  event_triggers:
-  - name: printOrderReadyToEatProductLabel
-    definition:
-      enable_manual: true
-      update:
-        columns:
-        - assemblyStatus
-    retry_conf:
-      num_retries: 0
-      interval_sec: 10
-      timeout_sec: 60
-    webhook_from_env: WEBHOOK_PRINT_PRODUCT_LABEL
-- table:
-    schema: order
-    name: orderSachet
-  configuration:
-    custom_root_fields:
-      insert: createOrderSachets
-      select_aggregate: orderSachetsAggregate
-      insert_one: createOrderSachet
-      select_by_pk: orderSachet
-      select: orderSachets
-      delete: deleteOrderSachets
-      update: updateOrderSachets
-      delete_by_pk: deleteOrderSachet
-      update_by_pk: updateOrderSachet
-    custom_column_names: {}
-  object_relationships:
-  - name: bulkItem
-    using:
-      foreign_key_constraint_on: bulkItemId
-  - name: ingredientSachet
-    using:
-      foreign_key_constraint_on: ingredientSachetId
-  - name: orderInventoryProduct
-    using:
-      manual_configuration:
-        remote_table:
-          schema: order
-          name: orderInventoryProduct
-        column_mapping:
-          orderInventoryProductId: id
-  - name: orderMealKitProduct
-    using:
-      foreign_key_constraint_on: orderMealKitProductId
-  - name: orderModifierRef
-    using:
-      foreign_key_constraint_on: orderModifierId
-  - name: orderReadyToEatProduct
-    using:
-      manual_configuration:
-        remote_table:
-          schema: order
-          name: orderReadyToEatProduct
-        column_mapping:
-          orderReadyToEatProductId: id
-  - name: packaging
-    using:
-      foreign_key_constraint_on: packagingId
-  - name: packingStation
-    using:
-      foreign_key_constraint_on: packingStationId
-  - name: sachetItem
-    using:
-      foreign_key_constraint_on: sachetItemId
-  - name: unitId
-    using:
-      foreign_key_constraint_on: unit
-  array_relationships:
-  - name: bulkItemHistories
-    using:
-      foreign_key_constraint_on:
-        column: orderSachetId
-        table:
-          schema: inventory
-          name: bulkItemHistory
-  - name: sachetItemHistories
-    using:
-      foreign_key_constraint_on:
-        column: orderSachetId
-        table:
-          schema: inventory
-          name: sachetItemHistory
-  computed_fields:
-  - name: isReadyForAssembly
-    definition:
-      function:
-        schema: order
-        name: isOrderReadyForAssembly
-    comment: ""
-  - name: isOrderAssembled
-    definition:
-      function:
-        schema: order
-        name: orderAssemblyStatus
-    comment: ""
-  event_triggers:
-  - name: OrderSachetCreation
-    definition:
-      enable_manual: true
-      insert:
-        columns: '*'
-      update:
-        columns:
-        - bulkItemId
-        - ingredientSachetId
-        - orderMealKitProductId
-        - packagingId
-        - sachetItemId
-        - quantity
-        - processingName
-        - status
-    retry_conf:
-      num_retries: 0
-      interval_sec: 10
-      timeout_sec: 60
-    webhook_from_env: WEBHOOK_ORDER_SACHET_UPSERT
-  - name: printOrderSachet
-    definition:
-      enable_manual: true
-      update:
-        columns:
-        - isPortioned
-    retry_conf:
-      num_retries: 0
-      interval_sec: 10
-      timeout_sec: 60
-    webhook_from_env: WEBHOOK_PRINT_SACHET_LABEL
+          schema: products
+          name: productOptionType
 - table:
     schema: order
     name: orderStatusEnum
   array_relationships:
-  - name: orders
+  - name: carts
     using:
       manual_configuration:
         remote_table:
           schema: order
-          name: order
+          name: cart
         column_mapping:
-          value: orderStatus
+          value: status
+- table:
+    schema: order
+    name: ordersAggregate
 - table:
     schema: order
     name: thirdPartyOrder
@@ -3570,7 +4482,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_HANDLE_THIRD_PARTY_ORDER
+    webhook: https://08e085bb8270.ngrok.io/event/order/third-party
 - table:
     schema: packaging
     name: packaging
@@ -3591,13 +4503,6 @@
     using:
       foreign_key_constraint_on: supplierId
   array_relationships:
-  - name: orderSachets
-    using:
-      foreign_key_constraint_on:
-        column: packagingId
-        table:
-          schema: order
-          name: orderSachet
   - name: purchaseOrderItems
     using:
       foreign_key_constraint_on:
@@ -3627,517 +4532,483 @@
     name: packagingSpecifications
 - table:
     schema: products
-    name: comboProduct
-  configuration:
-    custom_root_fields:
-      insert: createComboProduct
-      select_aggregate: comboProductsAggregate
-      select_by_pk: comboProduct
-      select: comboProducts
-      delete: deleteComboProduct
-      update: updateComboProduct
-    custom_column_names: {}
-  array_relationships:
-  - name: comboProductComponents
+    name: comboComponentOptions
+  object_relationships:
+  - name: linkedProduct
     using:
-      foreign_key_constraint_on:
-        column: comboProductId
-        table:
+      manual_configuration:
+        remote_table:
           schema: products
-          name: comboProductComponent
-  - name: orderInventoryProducts
+          name: product
+        column_mapping:
+          linkedProductId: id
+  - name: productOption
     using:
-      foreign_key_constraint_on:
-        column: comboProductId
-        table:
-          schema: order
-          name: orderInventoryProduct
-  - name: orderMealKitProducts
-    using:
-      foreign_key_constraint_on:
-        column: comboProductId
-        table:
-          schema: order
-          name: orderMealKitProduct
-  - name: orderReadyToEatProducts
-    using:
-      foreign_key_constraint_on:
-        column: comboProductId
-        table:
-          schema: order
-          name: orderReadyToEatProduct
+      manual_configuration:
+        remote_table:
+          schema: products
+          name: productOption
+        column_mapping:
+          productOptionId: id
   computed_fields:
-  - name: defaultCartItem
+  - name: cartItem
     definition:
       function:
         schema: products
-        name: defaultComboProductCartItem
+        name: comboProductComponentOptionCartItem
     comment: ""
-  - name: isValid
-    definition:
-      function:
-        schema: products
-        name: iscomboproductvalid
-    comment: ""
-  - name: richResult
-    definition:
-      function:
-        schema: products
-        name: getComboProductRichResult
-    comment: ""
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - comboComponentId
+      - linkedProductId
+      - productOptionId
+      - price
+      - discount
+      - productId
+      computed_fields:
+      - cartItem
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - comboComponentId
+      - linkedProductId
+      - productId
+      - productOptionId
+      - discount
+      - price
+      computed_fields:
+      - cartItem
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: products
     name: comboProductComponent
   configuration:
     custom_root_fields:
-      insert: createComboProductComponent
+      insert: createComboProductComponents
       select_aggregate: comboProductComponentsAggregate
+      insert_one: createComboProductComponent
       select_by_pk: comboProductComponent
       select: comboProductComponents
-      delete: deleteComboProductComponent
-      update: updateComboProductComponent
+      delete: deleteComboProductComponents
+      update: updateComboProductComponents
+      delete_by_pk: deleteComboProductComponent
+      update_by_pk: updateComboProductComponent
     custom_column_names: {}
   object_relationships:
-  - name: comboProduct
+  - name: linkedProduct
     using:
-      foreign_key_constraint_on: comboProductId
-  - name: customizableProduct
+      foreign_key_constraint_on: linkedProductId
+  - name: product
     using:
-      foreign_key_constraint_on: customizableProductId
-  - name: inventoryProduct
-    using:
-      foreign_key_constraint_on: inventoryProductId
-  - name: simpleRecipeProduct
-    using:
-      foreign_key_constraint_on: simpleRecipeProductId
+      foreign_key_constraint_on: productId
   array_relationships:
-  - name: orderInventoryProducts
+  - name: selectedOptions
     using:
-      foreign_key_constraint_on:
-        column: comboProductComponentId
-        table:
-          schema: order
-          name: orderInventoryProduct
-  - name: orderMealKitProducts
+      manual_configuration:
+        remote_table:
+          schema: products
+          name: comboComponentOptions
+        column_mapping:
+          id: comboComponentId
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - label
+      - created_at
+      - updated_at
+      - isArchived
+      - options
+      - position
+      - productId
+      - linkedProductId
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - isArchived
+      - id
+      - linkedProductId
+      - productId
+      - options
+      - position
+      - label
+      - created_at
+      - updated_at
+      filter: {}
+      allow_aggregations: true
+- table:
+    schema: products
+    name: customizableComponentOptions
+  object_relationships:
+  - name: linkedProduct
     using:
-      foreign_key_constraint_on:
-        column: comboProductComponentId
-        table:
-          schema: order
-          name: orderMealKitProduct
-  - name: orderReadyToEatProducts
+      manual_configuration:
+        remote_table:
+          schema: products
+          name: product
+        column_mapping:
+          linkedProductId: id
+  - name: productOption
     using:
-      foreign_key_constraint_on:
-        column: comboProductComponentId
-        table:
-          schema: order
-          name: orderReadyToEatProduct
+      manual_configuration:
+        remote_table:
+          schema: products
+          name: productOption
+        column_mapping:
+          productOptionId: id
   computed_fields:
-  - name: basePrice
+  - name: comboCartItem
     definition:
       function:
         schema: products
-        name: comboProductComponentBasePrice
+        name: comboProductComponentCustomizableCartItem
     comment: ""
+  - name: cartItem
+    definition:
+      function:
+        schema: products
+        name: customizableProductComponentOptionCartItem
+    comment: ""
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - customizableComponentId
+      - linkedProductId
+      - productOptionId
+      - price
+      - discount
+      - productId
+      computed_fields:
+      - cartItem
+      - comboCartItem
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - customizableComponentId
+      - linkedProductId
+      - productId
+      - productOptionId
+      - discount
+      - price
+      computed_fields:
+      - cartItem
+      - comboCartItem
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: products
-    name: customizableProduct
+    name: customizableProductComponent
   configuration:
     custom_root_fields:
-      insert: createCustomizableProduct
-      select_aggregate: customizableProductsAggregate
-      select_by_pk: customizableProduct
-      select: customizableProducts
-      delete: deleteCustomizableProduct
-      update: updateCustomizableProduct
+      insert: createCustomizableProductComponents
+      select_aggregate: customizableProductComponentsAggregate
+      insert_one: createCustomizableProductComponent
+      select_by_pk: customizableProductComponent
+      select: customizableProductComponents
+      delete: deleteCustomizableProductComponents
+      update: updateCustomizableProductComponents
+      delete_by_pk: deleteCustomizableProductComponent
+      update_by_pk: updateCustomizableProductComponent
     custom_column_names: {}
   object_relationships:
-  - name: defaultCustomizableProductOption
+  - name: linkedProduct
     using:
-      foreign_key_constraint_on: default
+      foreign_key_constraint_on: linkedProductId
+  - name: product
+    using:
+      foreign_key_constraint_on: productId
   array_relationships:
+  - name: selectedOptions
+    using:
+      manual_configuration:
+        remote_table:
+          schema: products
+          name: customizableComponentOptions
+        column_mapping:
+          id: customizableComponentId
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - created_at
+      - updated_at
+      - isArchived
+      - options
+      - position
+      - productId
+      - linkedProductId
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - isArchived
+      - id
+      - linkedProductId
+      - productId
+      - options
+      - position
+      - created_at
+      - updated_at
+      filter: {}
+      allow_aggregations: true
+- table:
+    schema: products
+    name: inventoryProductBundle
+- table:
+    schema: products
+    name: inventoryProductBundleSachet
+- table:
+    schema: products
+    name: product
+  configuration:
+    custom_root_fields:
+      insert: createProducts
+      select_aggregate: productsAggregate
+      insert_one: createProduct
+      select_by_pk: product
+      select: products
+      delete: deleteProducts
+      update: updateProducts
+      delete_by_pk: deleteProduct
+      update_by_pk: updateProduct
+    custom_column_names: {}
+  array_relationships:
+  - name: cartItems
+    using:
+      foreign_key_constraint_on:
+        column: productId
+        table:
+          schema: order
+          name: cartItem
   - name: comboProductComponents
     using:
-      foreign_key_constraint_on:
-        column: customizableProductId
-        table:
+      manual_configuration:
+        remote_table:
           schema: products
           name: comboProductComponent
-  - name: customizableProductOptions
+        column_mapping:
+          id: productId
+  - name: customizableProductComponents
     using:
       foreign_key_constraint_on:
-        column: customizableProductId
+        column: productId
         table:
           schema: products
-          name: customizableProductOption
-  - name: orderInventoryProducts
+          name: customizableProductComponent
+  - name: productOptions
     using:
       foreign_key_constraint_on:
-        column: customizableProductId
+        column: productId
         table:
-          schema: order
-          name: orderInventoryProduct
-  - name: orderMealKitProducts
-    using:
-      foreign_key_constraint_on:
-        column: customizableProductId
-        table:
-          schema: order
-          name: orderMealKitProduct
-  - name: orderReadyToEatProducts
-    using:
-      foreign_key_constraint_on:
-        column: customizableProductId
-        table:
-          schema: order
-          name: orderReadyToEatProduct
-  computed_fields:
-  - name: defaultCartItem
-    definition:
-      function:
-        schema: products
-        name: defaultCustomizableProductCartItem
-    comment: ""
-  - name: isValid
-    definition:
-      function:
-        schema: products
-        name: iscustomizableproductvalid
-    comment: ""
-  - name: richResult
-    definition:
-      function:
-        schema: products
-        name: getCustomizableProductRichResult
-    comment: ""
+          schema: products
+          name: productOption
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - name
+      - additionalText
+      - description
+      - assets
+      - isPublished
+      - isPopupAllowed
+      - defaultProductOptionId
+      - created_at
+      - updated_at
+      - tags
+      - isArchived
+      - type
+      - price
+      - discount
+      - importHistoryId
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - isArchived
+      - isPopupAllowed
+      - isPublished
+      - defaultProductOptionId
+      - id
+      - importHistoryId
+      - assets
+      - tags
+      - discount
+      - price
+      - additionalText
+      - description
+      - name
+      - type
+      - created_at
+      - updated_at
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: products
-    name: customizableProductOption
+    name: productConfigTemplate
+- table:
+    schema: products
+    name: productDataConfig
+- table:
+    schema: products
+    name: productOption
   configuration:
     custom_root_fields:
-      insert: createCustomizableProductOption
-      select_aggregate: customizableProductOptionsAggregate
-      select_by_pk: customizableProductOption
-      select: customizableProductOptions
-      delete: deleteCustomizableProductOption
-      update: updateCustomizableProductOption
+      insert: createProductOptions
+      select_aggregate: productOptionsAggregate
+      insert_one: createProductOption
+      select_by_pk: productOption
+      select: productOptions
+      delete: deleteProductOptions
+      update: updateProductOptions
+      delete_by_pk: deleteProductOption
+      update_by_pk: updateProductOption
     custom_column_names: {}
   object_relationships:
-  - name: customizableProduct
+  - name: modifier
     using:
-      foreign_key_constraint_on: customizableProductId
-  - name: inventoryProduct
+      foreign_key_constraint_on: modifierId
+  - name: operationConfig
     using:
-      foreign_key_constraint_on: inventoryProductId
-  - name: simpleRecipeProduct
-    using:
-      foreign_key_constraint_on: simpleRecipeProductId
-  array_relationships:
-  - name: orderInventoryProducts
-    using:
-      foreign_key_constraint_on:
-        column: customizableProductOptionId
-        table:
-          schema: order
-          name: orderInventoryProduct
-  - name: orderMealKitProducts
-    using:
-      foreign_key_constraint_on:
-        column: customizableProductOptionId
-        table:
-          schema: order
-          name: orderMealKitProduct
-  - name: orderReadyToEatProducts
-    using:
-      foreign_key_constraint_on:
-        column: customizableProductOptionId
-        table:
-          schema: order
-          name: orderReadyToEatProduct
-  computed_fields:
+      foreign_key_constraint_on: operationConfigId
   - name: product
-    definition:
-      function:
-        schema: products
-        name: customizableProductOptionProduct
-    comment: ""
-  - name: fullName
-    definition:
-      function:
-        schema: products
-        name: customizableProductOptionFullName
-    comment: ""
-- table:
-    schema: products
-    name: inventoryProduct
-  configuration:
-    custom_root_fields:
-      insert: createInventoryProduct
-      select_aggregate: inventoryProductsAggregate
-      select_by_pk: inventoryProduct
-      select: inventoryProducts
-      delete: deleteInventoryProduct
-      update: updateInventoryProduct
-    custom_column_names: {}
-  object_relationships:
-  - name: defaultInventoryProductOption
     using:
-      foreign_key_constraint_on: default
+      foreign_key_constraint_on: productId
+  - name: productOptionType
+    using:
+      manual_configuration:
+        remote_table:
+          schema: products
+          name: productOptionType
+        column_mapping:
+          type: title
   - name: sachetItem
     using:
       foreign_key_constraint_on: sachetItemId
-  - name: supplierItem
-    using:
-      foreign_key_constraint_on: supplierItemId
-  array_relationships:
-  - name: comboProductComponents
-    using:
-      foreign_key_constraint_on:
-        column: inventoryProductId
-        table:
-          schema: products
-          name: comboProductComponent
-  - name: customizableProductOptions
-    using:
-      foreign_key_constraint_on:
-        column: inventoryProductId
-        table:
-          schema: products
-          name: customizableProductOption
-  - name: inventoryProductOptions
-    using:
-      foreign_key_constraint_on:
-        column: inventoryProductId
-        table:
-          schema: products
-          name: inventoryProductOption
-  - name: orderInventoryProducts
-    using:
-      foreign_key_constraint_on:
-        column: inventoryProductId
-        table:
-          schema: order
-          name: orderInventoryProduct
-  computed_fields:
-  - name: defaultCartItem
-    definition:
-      function:
-        schema: products
-        name: defaultInventoryProductCartItem
-    comment: ""
-  - name: isValid
-    definition:
-      function:
-        schema: products
-        name: isinventoryproductvalid
-    comment: ""
-  - name: allergens
-    definition:
-      function:
-        schema: products
-        name: inventoryProductAllergens
-    comment: ""
-  - name: nutritionalInfo
-    definition:
-      function:
-        schema: products
-        name: inventoryProductNutrition
-    comment: ""
-  - name: cartItem
-    definition:
-      function:
-        schema: products
-        name: inventoryProductCartItem
-    comment: ""
-  - name: richResult
-    definition:
-      function:
-        schema: products
-        name: getInventoryProductRichResult
-    comment: ""
-- table:
-    schema: products
-    name: inventoryProductOption
-  configuration:
-    custom_root_fields:
-      insert: createInventoryProductOption
-      select_aggregate: inventoryProductOptionsAggregate
-      select_by_pk: inventoryProductOption
-      select: inventoryProductOptions
-      delete: deleteInventoryProductOption
-      update: updateInventoryProductOption
-    custom_column_names: {}
-  object_relationships:
-  - name: assemblyStation
-    using:
-      foreign_key_constraint_on: assemblyStationId
-  - name: inventoryProduct
-    using:
-      foreign_key_constraint_on: inventoryProductId
-  - name: labelTemplate
-    using:
-      foreign_key_constraint_on: labelTemplateId
-  - name: modifier
-    using:
-      foreign_key_constraint_on: modifierId
-  - name: operationConfig
-    using:
-      foreign_key_constraint_on: operationConfigId
-  - name: packaging
-    using:
-      foreign_key_constraint_on: packagingId
-  array_relationships:
-  - name: orderInventoryProducts
-    using:
-      foreign_key_constraint_on:
-        column: inventoryProductOptionId
-        table:
-          schema: order
-          name: orderInventoryProduct
-  computed_fields:
-  - name: fullName
-    definition:
-      function:
-        schema: products
-        name: inventoryProductOptionFullName
-    comment: ""
-- table:
-    schema: products
-    name: simpleRecipeProduct
-  configuration:
-    custom_root_fields:
-      insert: createSimpleRecipeProduct
-      select_aggregate: simpleRecipeProductsAggregate
-      select_by_pk: simpleRecipeProduct
-      select: simpleRecipeProducts
-      delete: deleteSimpleRecipeProduct
-      update: updateSimpleRecipeProduct
-    custom_column_names: {}
-  object_relationships:
-  - name: defaultSimpleRecipeProductOption
-    using:
-      foreign_key_constraint_on: default
-  - name: simpleRecipe
-    using:
-      foreign_key_constraint_on: simpleRecipeId
-  array_relationships:
-  - name: comboProductComponents
-    using:
-      foreign_key_constraint_on:
-        column: simpleRecipeProductId
-        table:
-          schema: products
-          name: comboProductComponent
-  - name: customizableProductOptions
-    using:
-      foreign_key_constraint_on:
-        column: simpleRecipeProductId
-        table:
-          schema: products
-          name: customizableProductOption
-  - name: orderMealKitProducts
-    using:
-      foreign_key_constraint_on:
-        column: simpleRecipeProductId
-        table:
-          schema: order
-          name: orderMealKitProduct
-  - name: orderReadyToEatProducts
-    using:
-      foreign_key_constraint_on:
-        column: simpleRecipeProductId
-        table:
-          schema: order
-          name: orderReadyToEatProduct
-  - name: simpleRecipeProductOptions
-    using:
-      foreign_key_constraint_on:
-        column: simpleRecipeProductId
-        table:
-          schema: products
-          name: simpleRecipeProductOption
-  computed_fields:
-  - name: cartItem
-    definition:
-      function:
-        schema: products
-        name: simpleRecipeProductCartItem
-    comment: ""
-  - name: defaultCartItem
-    definition:
-      function:
-        schema: products
-        name: defaultSimpleRecipeProductCartItem
-    comment: ""
-  - name: isValid
-    definition:
-      function:
-        schema: products
-        name: isSimpleRecipeProductValid
-    comment: ""
-- table:
-    schema: products
-    name: simpleRecipeProductOption
-  configuration:
-    custom_root_fields:
-      insert: createSimpleRecipeProductOption
-      select_aggregate: simpleRecipeProductOptionsAggregate
-      select_by_pk: simpleRecipeProductOption
-      select: simpleRecipeProductOptions
-      delete: deleteSimpleRecipeProductOption
-      update: updateSimpleRecipeProductOption
-    custom_column_names: {}
-  object_relationships:
-  - name: assemblyStation
-    using:
-      foreign_key_constraint_on: assemblyStationId
-  - name: labelTemplate
-    using:
-      foreign_key_constraint_on: labelTemplateId
-  - name: modifier
-    using:
-      foreign_key_constraint_on: modifierId
-  - name: operationConfig
-    using:
-      foreign_key_constraint_on: operationConfigId
-  - name: packaging
-    using:
-      foreign_key_constraint_on: packagingId
-  - name: simpleRecipeProduct
-    using:
-      foreign_key_constraint_on: simpleRecipeProductId
   - name: simpleRecipeYield
     using:
       foreign_key_constraint_on: simpleRecipeYieldId
-  array_relationships:
-  - name: orderMealKitProducts
+  - name: supplierItem
     using:
-      foreign_key_constraint_on:
-        column: simpleRecipeProductOptionId
-        table:
-          schema: order
-          name: orderMealKitProduct
-  - name: orderReadyToEatProducts
-    using:
-      foreign_key_constraint_on:
-        column: simpleRecipeProductOptionId
-        table:
-          schema: order
-          name: orderReadyToEatProduct
-  - name: subscriptionOccurences
-    using:
-      foreign_key_constraint_on:
-        column: simpleRecipeProductOptionId
-        table:
-          schema: subscription
-          name: subscriptionOccurence_product
+      foreign_key_constraint_on: supplierItemId
   computed_fields:
-  - name: fullName
+  - name: cartItem
     definition:
       function:
         schema: products
-        name: simpleRecipeProductOptionFullName
+        name: productOptionCartItem
     comment: ""
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - productId
+      - label
+      - modifierId
+      - operationConfigId
+      - simpleRecipeYieldId
+      - supplierItemId
+      - sachetItemId
+      - position
+      - created_at
+      - updated_at
+      - price
+      - discount
+      - quantity
+      - type
+      - isArchived
+      - inventoryProductBundleId
+      computed_fields:
+      - cartItem
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - isArchived
+      - id
+      - inventoryProductBundleId
+      - modifierId
+      - operationConfigId
+      - productId
+      - quantity
+      - sachetItemId
+      - simpleRecipeYieldId
+      - supplierItemId
+      - discount
+      - position
+      - price
+      - label
+      - type
+      - created_at
+      - updated_at
+      computed_fields:
+      - cartItem
+      filter: {}
+      allow_aggregations: true
+- table:
+    schema: products
+    name: productOptionType
+  configuration:
+    custom_root_fields:
+      insert: createProductOptionTypes
+      select_aggregate: productOptionTypesAggregate
+      insert_one: createProductOptionType
+      select_by_pk: productOptionType
+      select: productOptionTypes
+      delete: deleteProductOptionTypes
+      update: updateProductOptionTypes
+      delete_by_pk: deleteProductOptionType
+      update_by_pk: updateProductOptionType
+    custom_column_names: {}
+  array_relationships:
+  - name: cartItemViews
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: cartItemView
+        column_mapping:
+          title: productOptionType
+  - name: productOptions
+    using:
+      manual_configuration:
+        remote_table:
+          schema: products
+          name: productOption
+        column_mapping:
+          title: type
+- table:
+    schema: products
+    name: productOptionView
+  array_relationships:
+  - name: cartItemViews
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: cartItemView
+        column_mapping:
+          id: productOptionId
+- table:
+    schema: products
+    name: productType
 - table:
     schema: public
     name: response
@@ -4162,256 +5033,6 @@
       function:
         schema: rules
         name: isConditionValid
-    comment: ""
-- table:
-    schema: rules
-    name: facts
-  configuration:
-    custom_root_fields:
-      insert: createFacts
-      select_aggregate: factsAggregate
-      insert_one: createFact
-      select_by_pk: fact
-      select: facts
-      delete: deleteFacts
-      update: updateFacts
-      delete_by_pk: deleteFact
-      update_by_pk: updateFact
-    custom_column_names: {}
-  computed_fields:
-  - name: cartComboProduct
-    definition:
-      function:
-        schema: rules
-        name: cartComboProduct
-    comment: ""
-  - name: cartCustomProductOption
-    definition:
-      function:
-        schema: rules
-        name: cartCustomProductOption
-    comment: ""
-  - name: cartInvProduct
-    definition:
-      function:
-        schema: rules
-        name: cartInvProduct
-    comment: ""
-  - name: cartMealkitProductOption
-    definition:
-      function:
-        schema: rules
-        name: cartMealkitProductOption
-    comment: ""
-  - name: cartReadyToEatProductOption
-    definition:
-      function:
-        schema: rules
-        name: cartReadyToEatProductOption
-    comment: ""
-  - name: couponCountWithDuration
-    definition:
-      function:
-        schema: rules
-        name: couponCountWithDuration
-    comment: ""
-  - name: createdAt
-    definition:
-      function:
-        schema: rules
-        name: createdAt
-    comment: ""
-  - name: customerEmail
-    definition:
-      function:
-        schema: rules
-        name: customerEmail
-    comment: ""
-  - name: customerReferralCode
-    definition:
-      function:
-        schema: rules
-        name: customerReferralCode
-    comment: ""
-  - name: customerReferredByCode
-    definition:
-      function:
-        schema: rules
-        name: customerReferredByCode
-    comment: ""
-  - name: customerSource
-    definition:
-      function:
-        schema: rules
-        name: customerSource
-    comment: ""
-  - name: hasAtleastOrderedOnce
-    definition:
-      function:
-        schema: rules
-        name: hasAtleastOrderedOnce
-    comment: ""
-  - name: loyaltyPoints
-    definition:
-      function:
-        schema: rules
-        name: loyaltyPoints
-    comment: ""
-  - name: numOfOrders
-    definition:
-      function:
-        schema: rules
-        name: numOfOrders
-    comment: ""
-  - name: numberOfComboProducts
-    definition:
-      function:
-        schema: rules
-        name: numberOfComboProducts
-    comment: ""
-  - name: numberOfCustomizableProducts
-    definition:
-      function:
-        schema: rules
-        name: numberOfCustomizableProducts
-    comment: ""
-  - name: numberOfInventoryProducts
-    definition:
-      function:
-        schema: rules
-        name: numberOfInventoryProducts
-    comment: ""
-  - name: numberOfMealkitProducts
-    definition:
-      function:
-        schema: rules
-        name: numberOfMealkitProducts
-    comment: ""
-  - name: numberOfReadyToEatProducts
-    definition:
-      function:
-        schema: rules
-        name: numberOfReadyToEatProducts
-    comment: ""
-  - name: orderAmount
-    definition:
-      function:
-        schema: rules
-        name: orderAmount
-    comment: ""
-  - name: orderCountWithDuration
-    definition:
-      function:
-        schema: rules
-        name: orderCountWithDuration
-    comment: ""
-  - name: referralStatus
-    definition:
-      function:
-        schema: rules
-        name: referralStatus
-    comment: ""
-  - name: totalNumberOfComboProducts
-    definition:
-      function:
-        schema: rules
-        name: totalNumberOfComboProducts
-    comment: ""
-  - name: totalNumberOfCustomizableProducts
-    definition:
-      function:
-        schema: rules
-        name: totalNumberOfCustomizableProducts
-    comment: ""
-  - name: totalNumberOfInventoryProducts
-    definition:
-      function:
-        schema: rules
-        name: totalNumberOfInventoryProducts
-    comment: ""
-  - name: totalNumberOfMealkitProducts
-    definition:
-      function:
-        schema: rules
-        name: totalNumberOfMealkitProducts
-    comment: ""
-  - name: totalNumberOfReadyToEatProducts
-    definition:
-      function:
-        schema: rules
-        name: totalNumberOfReadyToEatProducts
-    comment: ""
-  - name: cartItemTotal
-    definition:
-      function:
-        schema: rules
-        name: cartItemTotal
-    comment: ""
-  - name: cartCustomProduct
-    definition:
-      function:
-        schema: rules
-        name: cartCustomProduct
-    comment: ""
-  - name: cartInvProductOption
-    definition:
-      function:
-        schema: rules
-        name: cartInvProductOption
-    comment: ""
-  - name: cartMealkitProduct
-    definition:
-      function:
-        schema: rules
-        name: cartMealkitProduct
-    comment: ""
-  - name: cartReadyToEatProduct
-    definition:
-      function:
-        schema: rules
-        name: cartReadyToEatProduct
-    comment: ""
-  - name: discountReward
-    definition:
-      function:
-        schema: rules
-        name: discountReward
-    comment: ""
-  - name: walletAmountReward
-    definition:
-      function:
-        schema: rules
-        name: walletAmountReward
-    comment: ""
-  - name: loyaltyPointsReward
-    definition:
-      function:
-        schema: rules
-        name: loyaltyPointsReward
-    comment: ""
-  - name: numberOfLoyaltyPointsReward
-    definition:
-      function:
-        schema: rules
-        name: numberOfLoyaltyPointsReward
-    comment: ""
-  - name: numberOfDiscountReward
-    definition:
-      function:
-        schema: rules
-        name: numberOfDiscountReward
-    comment: ""
-  - name: numberOfWalletAmountReward
-    definition:
-      function:
-        schema: rules
-        name: numberOfWalletAmountReward
-    comment: ""
-  - name: budget
-    definition:
-      function:
-        schema: rules
-        name: budget
     comment: ""
 - table:
     schema: safety
@@ -4492,9 +5113,22 @@
   - name: labelTemplate
     using:
       foreign_key_constraint_on: labelTemplateId
+  - name: packaging
+    using:
+      foreign_key_constraint_on: packagingId
   - name: station
     using:
       foreign_key_constraint_on: stationId
+  computed_fields:
+  - name: name
+    definition:
+      function:
+        schema: settings
+        name: operationConfigName
+    comment: ""
+- table:
+    schema: settings
+    name: organizationSettings
 - table:
     schema: settings
     name: role
@@ -4627,34 +5261,6 @@
         table:
           schema: ingredient
           name: modeOfFulfillment
-  - name: orderInventoryProductsAssembly
-    using:
-      foreign_key_constraint_on:
-        column: assemblyStationId
-        table:
-          schema: order
-          name: orderInventoryProduct
-  - name: orderMealKitProductsAssembly
-    using:
-      foreign_key_constraint_on:
-        column: assemblyStationId
-        table:
-          schema: order
-          name: orderMealKitProduct
-  - name: orderReadyToEatProductsAssembly
-    using:
-      foreign_key_constraint_on:
-        column: assemblyStationId
-        table:
-          schema: order
-          name: orderReadyToEatProduct
-  - name: orderSachetsPacking
-    using:
-      foreign_key_constraint_on:
-        column: packingStationId
-        table:
-          schema: order
-          name: orderSachet
   - name: sachetWorkOrders
     using:
       foreign_key_constraint_on:
@@ -4749,7 +5355,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_MANAGE_USER
+    webhook: '{{DAILYOS_SERVER_URL}}/webhook/user'
 - table:
     schema: settings
     name: user_role
@@ -4777,20 +5383,20 @@
     using:
       foreign_key_constraint_on: cuisine
   array_relationships:
-  - name: orderReadyToEatProducts
+  - name: instructionSets
     using:
       foreign_key_constraint_on:
         column: simpleRecipeId
         table:
-          schema: order
-          name: orderReadyToEatProduct
-  - name: simpleRecipeProducts
+          schema: instructions
+          name: instructionSet
+  - name: simpleRecipeIngredients
     using:
       foreign_key_constraint_on:
         column: simpleRecipeId
         table:
-          schema: products
-          name: simpleRecipeProduct
+          schema: simpleRecipe
+          name: simpleRecipe_ingredient_processing
   - name: simpleRecipeYields
     using:
       foreign_key_constraint_on:
@@ -4813,6 +5419,9 @@
     comment: ""
 - table:
     schema: simpleRecipe
+    name: simpleRecipeComponent_productOptionType
+- table:
+    schema: simpleRecipe
     name: simpleRecipeYield
   configuration:
     custom_root_fields:
@@ -4828,6 +5437,13 @@
     using:
       foreign_key_constraint_on: simpleRecipeId
   array_relationships:
+  - name: cartItems
+    using:
+      foreign_key_constraint_on:
+        column: simpleRecipeYieldId
+        table:
+          schema: order
+          name: cartItem
   - name: ingredientSachets
     using:
       foreign_key_constraint_on:
@@ -4835,6 +5451,22 @@
         table:
           schema: simpleRecipe
           name: simpleRecipeYield_ingredientSachet
+  - name: simpleRecipeCartItemViews
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: cartItemView
+        column_mapping:
+          id: simpleRecipeYieldId
+  - name: subRecipeCartItemViews
+    using:
+      manual_configuration:
+        remote_table:
+          schema: order
+          name: cartItemView
+        column_mapping:
+          id: subRecipeYieldId
   computed_fields:
   - name: nutritionalInfo
     definition:
@@ -4856,6 +5488,9 @@
     comment: ""
 - table:
     schema: simpleRecipe
+    name: simpleRecipeYieldView
+- table:
+    schema: simpleRecipe
     name: simpleRecipeYield_ingredientSachet
   configuration:
     custom_root_fields:
@@ -4870,9 +5505,48 @@
   - name: ingredientSachet
     using:
       foreign_key_constraint_on: ingredientSachetId
+  - name: simpleRecipeIngredientProcessing
+    using:
+      foreign_key_constraint_on: simpleRecipeIngredientProcessingId
   - name: simpleRecipeYield
     using:
       foreign_key_constraint_on: recipeYieldId
+- table:
+    schema: simpleRecipe
+    name: simpleRecipe_ingredient_processing
+  configuration:
+    custom_root_fields:
+      insert: createSimpleRecipeIngredientProcessings
+      select_aggregate: simpleRecipeIngredientProcessingsAggregate
+      insert_one: createSimpleRecipeIngredientProcessing
+      select_by_pk: simpleRecipeIngredientProcessing
+      select: simpleRecipeIngredientProcessings
+      delete: deleteSimpleRecipeIngredientProcessings
+      update: updateSimpleRecipeIngredientProcessings
+      delete_by_pk: deleteSimpleRecipeIngredientProcessing
+      update_by_pk: updateSimpleRecipeIngredientProcessing
+    custom_column_names: {}
+  object_relationships:
+  - name: ingredient
+    using:
+      foreign_key_constraint_on: ingredientId
+  - name: ingredientProcessing
+    using:
+      foreign_key_constraint_on: processingId
+  - name: simpleRecipe
+    using:
+      foreign_key_constraint_on: simpleRecipeId
+  array_relationships:
+  - name: simpleRecipeYield_ingredientSachets
+    using:
+      foreign_key_constraint_on:
+        column: simpleRecipeIngredientProcessingId
+        table:
+          schema: simpleRecipe
+          name: simpleRecipeYield_ingredientSachet
+- table:
+    schema: simpleRecipe
+    name: simpleRecipe_productOptionType
 - table:
     schema: subscription
     name: brand_subscriptionTitle
@@ -4880,6 +5554,25 @@
   - name: brand
     using:
       foreign_key_constraint_on: brandId
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - brandId
+      - subscriptionTitleId
+      - isActive
+      - allowAutoSelectOptOut
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - brandId
+      - subscriptionTitleId
+      - isActive
+      - allowAutoSelectOptOut
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: subscription
     name: subscription
@@ -4895,6 +5588,13 @@
         table:
           schema: subscription
           name: subscription_zipcode
+  - name: brand_customers
+    using:
+      foreign_key_constraint_on:
+        column: subscriptionId
+        table:
+          schema: crm
+          name: brand_customer
   - name: customers
     using:
       foreign_key_constraint_on:
@@ -4902,6 +5602,14 @@
         table:
           schema: crm
           name: customer
+  - name: subscriptionAddOnProducts
+    using:
+      manual_configuration:
+        remote_table:
+          schema: subscription
+          name: subscriptionOccurence_addOn
+        column_mapping:
+          id: subscriptionId
   - name: subscriptionOccurences
     using:
       foreign_key_constraint_on:
@@ -4916,6 +5624,39 @@
         table:
           schema: subscription
           name: subscriptionOccurence_product
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - subscriptionItemCountId
+      - rrule
+      - metaDetails
+      - cutOffTime
+      - leadTime
+      - startTime
+      - startDate
+      - endDate
+      - defaultSubscriptionAutoSelectOption
+      - reminderSettings
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - endDate
+      - startDate
+      - id
+      - subscriptionItemCountId
+      - leadTime
+      - metaDetails
+      - reminderSettings
+      - startTime
+      - defaultSubscriptionAutoSelectOption
+      - rrule
+      - cutOffTime
+      filter: {}
+      allow_aggregations: true
   event_triggers:
   - name: createOccurences
     definition:
@@ -4929,7 +5670,25 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_CREATE_OCCURENCES
+    webhook: '{{DAILYOS_SERVER_URL}}/webhook/occurence/create'
+- table:
+    schema: subscription
+    name: subscriptionAutoSelectOption
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - methodName
+      - displayName
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - displayName
+      - methodName
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: subscription
     name: subscriptionItemCount
@@ -4952,6 +5711,37 @@
         schema: subscription
         name: isSubscriptionItemCountValid
     comment: ""
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - subscriptionServingId
+      - count
+      - metaDetails
+      - price
+      - isActive
+      - tax
+      - isTaxIncluded
+      computed_fields:
+      - isValid
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - isActive
+      - isTaxIncluded
+      - count
+      - id
+      - subscriptionServingId
+      - metaDetails
+      - price
+      - tax
+      computed_fields:
+      - isValid
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: subscription
     name: subscriptionOccurence
@@ -4971,7 +5761,23 @@
   - name: subscription
     using:
       foreign_key_constraint_on: subscriptionId
+  - name: subscriptionOccurenceView
+    using:
+      manual_configuration:
+        remote_table:
+          schema: subscription
+          name: subscriptionOccurenceView
+        column_mapping:
+          id: id
   array_relationships:
+  - name: addOnProducts
+    using:
+      manual_configuration:
+        remote_table:
+          schema: subscription
+          name: subscriptionOccurence_addOn
+        column_mapping:
+          id: subscriptionOccurenceId
   - name: brand_subscriptionOccurences
     using:
       manual_configuration:
@@ -4987,13 +5793,6 @@
         table:
           schema: subscription
           name: subscriptionOccurence_customer
-  - name: orderCarts
-    using:
-      foreign_key_constraint_on:
-        column: subscriptionOccurenceId
-        table:
-          schema: crm
-          name: orderCart
   - name: products
     using:
       foreign_key_constraint_on:
@@ -5014,6 +5813,37 @@
         schema: subscription
         name: calculateIsVisible
     comment: ""
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - fulfillmentDate
+      - cutoffTimeStamp
+      - subscriptionId
+      - startTimeStamp
+      - assets
+      - subscriptionAutoSelectOption
+      computed_fields:
+      - isValid
+      - isVisible
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - fulfillmentDate
+      - id
+      - subscriptionId
+      - assets
+      - subscriptionAutoSelectOption
+      - cutoffTimeStamp
+      - startTimeStamp
+      computed_fields:
+      - isValid
+      - isVisible
+      filter: {}
+      allow_aggregations: true
   event_triggers:
   - name: createOccurenceScheduledEvent
     definition:
@@ -5027,45 +5857,181 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook_from_env: WEBHOOK_CREATE_OCCURENCE_SCHEDULED_EVENT
+    webhook: '{{DAILYOS_SERVER_URL}}/webhook/occurence/schedule/create'
+- table:
+    schema: subscription
+    name: subscriptionOccurenceView
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - isValid
+      - id
+      - isVisible
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - isValid
+      - isVisible
+      - id
+      filter: {}
+      allow_aggregations: true
+- table:
+    schema: subscription
+    name: subscriptionOccurence_addOn
+  object_relationships:
+  - name: productOption
+    using:
+      foreign_key_constraint_on: productOptionId
+  computed_fields:
+  - name: cartItem
+    definition:
+      function:
+        schema: subscription
+        name: addOnCartItem
+    comment: ""
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - subscriptionOccurenceId
+      - unitPrice
+      - productCategory
+      - isAvailable
+      - isVisible
+      - isSingleSelect
+      - subscriptionId
+      - productOptionId
+      - created_at
+      - updated_at
+      computed_fields:
+      - cartItem
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - isAvailable
+      - isSingleSelect
+      - isVisible
+      - id
+      - productOptionId
+      - subscriptionId
+      - subscriptionOccurenceId
+      - unitPrice
+      - productCategory
+      - created_at
+      - updated_at
+      computed_fields:
+      - cartItem
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: subscription
     name: subscriptionOccurence_customer
   object_relationships:
+  - name: brand_customer
+    using:
+      foreign_key_constraint_on: brand_customerId
+  - name: cart
+    using:
+      foreign_key_constraint_on: cartId
   - name: customer
     using:
       foreign_key_constraint_on: keycloakId
-  - name: orderCart
-    using:
-      foreign_key_constraint_on: orderCartId
   - name: subscriptionOccurence
     using:
       foreign_key_constraint_on: subscriptionOccurenceId
+  computed_fields:
+  - name: validStatus
+    definition:
+      function:
+        schema: subscription
+        name: isCartValid
+    comment: ""
+  insert_permissions:
+  - role: consumer
+    permission:
+      check:
+        keycloakId:
+          _eq: X-Hasura-Keycloak-Id
+      set:
+        keycloakId: x-hasura-Keycloak-Id
+      columns:
+      - subscriptionOccurenceId
+      - keycloakId
+      - cartId
+      - isSkipped
+      - isAuto
+      - brand_customerId
+      backend_only: false
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - isAuto
+      - isSkipped
+      - brand_customerId
+      - cartId
+      - subscriptionOccurenceId
+      - keycloakId
+      computed_fields:
+      - validStatus
+      filter:
+        keycloakId:
+          _eq: X-Hasura-Keycloak-Id
+      allow_aggregations: true
+  update_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - isAuto
+      - isSkipped
+      - brand_customerId
+      - cartId
+      - subscriptionOccurenceId
+      - keycloakId
+      filter:
+        keycloakId:
+          _eq: X-Hasura-Keycloak-Id
+      check:
+        keycloakId:
+          _eq: X-Hasura-Keycloak-Id
+      set:
+        keycloakId: x-hasura-Keycloak-Id
+  delete_permissions:
+  - role: consumer
+    permission:
+      filter:
+        keycloakId:
+          _eq: X-Hasura-Keycloak-Id
 - table:
     schema: subscription
     name: subscriptionOccurence_product
   object_relationships:
-  - name: inventoryProduct
-    using:
-      foreign_key_constraint_on: inventoryProductId
-  - name: inventoryProductOption
-    using:
-      foreign_key_constraint_on: inventoryProductOptionId
   - name: productCategoryRef
     using:
       foreign_key_constraint_on: productCategory
-  - name: simpleRecipeProduct
+  - name: productOption
     using:
-      foreign_key_constraint_on: simpleRecipeProductId
-  - name: simpleRecipeProductOption
-    using:
-      foreign_key_constraint_on: simpleRecipeProductOptionId
+      foreign_key_constraint_on: productOptionId
   - name: subscription
     using:
       foreign_key_constraint_on: subscriptionId
   - name: subscriptionOccurence
     using:
       foreign_key_constraint_on: subscriptionOccurenceId
+  array_relationships:
+  - name: cartItems
+    using:
+      foreign_key_constraint_on:
+        column: subscriptionOccurenceProductId
+        table:
+          schema: order
+          name: cartItem
   computed_fields:
   - name: cartItem
     definition:
@@ -5073,6 +6039,71 @@
         schema: subscription
         name: cartItem
     comment: ""
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - subscriptionOccurenceId
+      - addOnPrice
+      - addOnLabel
+      - productCategory
+      - isAvailable
+      - isVisible
+      - isSingleSelect
+      - subscriptionId
+      - id
+      - created_at
+      - updated_at
+      - isAutoSelectable
+      - productOptionId
+      computed_fields:
+      - cartItem
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - isAutoSelectable
+      - isAvailable
+      - isSingleSelect
+      - isVisible
+      - id
+      - productOptionId
+      - subscriptionId
+      - subscriptionOccurenceId
+      - addOnPrice
+      - addOnLabel
+      - productCategory
+      - created_at
+      - updated_at
+      computed_fields:
+      - cartItem
+      filter: {}
+      allow_aggregations: true
+- table:
+    schema: subscription
+    name: subscriptionPickupOption
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - time
+      - address
+      - created_at
+      - updated_at
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - id
+      - address
+      - time
+      - created_at
+      - updated_at
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: subscription
     name: subscriptionServing
@@ -5098,6 +6129,33 @@
         schema: subscription
         name: isSubscriptionServingValid
     comment: ""
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - subscriptionTitleId
+      - servingSize
+      - metaDetails
+      - defaultSubscriptionItemCountId
+      - isActive
+      computed_fields:
+      - isValid
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - isActive
+      - defaultSubscriptionItemCountId
+      - id
+      - servingSize
+      - subscriptionTitleId
+      - metaDetails
+      computed_fields:
+      - isValid
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: subscription
     name: subscriptionTitle
@@ -5128,6 +6186,35 @@
         schema: subscription
         name: isSubscriptionTitleValid
     comment: ""
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - title
+      - metaDetails
+      - defaultSubscriptionServingId
+      - created_at
+      - updated_at
+      - isActive
+      computed_fields:
+      - isValid
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - isActive
+      - defaultSubscriptionServingId
+      - id
+      - metaDetails
+      - title
+      - created_at
+      - updated_at
+      computed_fields:
+      - isValid
+      filter: {}
+      allow_aggregations: true
 - table:
     schema: subscription
     name: subscription_zipcode
@@ -5135,3 +6222,158 @@
   - name: subscription
     using:
       foreign_key_constraint_on: subscriptionId
+  - name: subscriptionPickupOption
+    using:
+      foreign_key_constraint_on: subscriptionPickupOptionId
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - subscriptionId
+      - zipcode
+      - deliveryPrice
+      - isActive
+      - deliveryTime
+      - subscriptionPickupOptionId
+      - isDeliveryActive
+      - isPickupActive
+      - defaultAutoSelectFulfillmentMode
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - isActive
+      - isDeliveryActive
+      - isPickupActive
+      - subscriptionId
+      - subscriptionPickupOptionId
+      - deliveryTime
+      - deliveryPrice
+      - defaultAutoSelectFulfillmentMode
+      - zipcode
+      filter: {}
+      allow_aggregations: true
+- table:
+    schema: website
+    name: website
+  object_relationships:
+  - name: brand
+    using:
+      foreign_key_constraint_on: brandId
+  array_relationships:
+  - name: websitePages
+    using:
+      foreign_key_constraint_on:
+        column: websiteId
+        table:
+          schema: website
+          name: websitePage
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - brandId
+      - faviconUrl
+      - created_at
+      - updated_at
+      - published
+      filter: {}
+  - role: guest-consumer
+    permission:
+      columns:
+      - published
+      - brandId
+      - id
+      - faviconUrl
+      - created_at
+      - updated_at
+      filter: {}
+      allow_aggregations: true
+- table:
+    schema: website
+    name: websitePage
+  object_relationships:
+  - name: website
+    using:
+      foreign_key_constraint_on: websiteId
+  array_relationships:
+  - name: websitePageModules
+    using:
+      foreign_key_constraint_on:
+        column: websitePageId
+        table:
+          schema: website
+          name: websitePageModule
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - websiteId
+      - route
+      - internalPageName
+      - published
+      - isArchived
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - isArchived
+      - published
+      - id
+      - websiteId
+      - internalPageName
+      - route
+      filter: {}
+      allow_aggregations: true
+- table:
+    schema: website
+    name: websitePageModule
+  object_relationships:
+  - name: file
+    using:
+      foreign_key_constraint_on: fileId
+  - name: template
+    using:
+      foreign_key_constraint_on: templateId
+  - name: websitePage
+    using:
+      foreign_key_constraint_on: websitePageId
+  select_permissions:
+  - role: consumer
+    permission:
+      columns:
+      - id
+      - websitePageId
+      - moduleType
+      - fileId
+      - internalModuleIdentifier
+      - templateId
+      - position
+      - visibilityConditionId
+      - config
+      - config2
+      - config3
+      - config4
+      filter: {}
+      allow_aggregations: true
+  - role: guest-consumer
+    permission:
+      columns:
+      - fileId
+      - id
+      - templateId
+      - visibilityConditionId
+      - websitePageId
+      - config2
+      - config
+      - config3
+      - position
+      - config4
+      - internalModuleIdentifier
+      - moduleType
+      filter: {}
+      allow_aggregations: true

@@ -1,11 +1,15 @@
 - name: dailycloak
   definition:
-    url_from_env: DAILYCLOAK_REMOTE_SCHEMA_URL
+    url: https://dailycloak.dailykit.org/v1/graphql
     timeout_seconds: 60
     headers:
     - name: Organization-Id
       value_from_env: HEADER_REMOTE_SCHEMA_ORGANIZATIONID
     forward_client_headers: true
+- name: dailygit
+  definition:
+    url_from_env: DAILYGIT_REMOTE_SCHEMA_URL
+    timeout_seconds: 60
 - name: dailykey
   definition:
     url_from_env: DAILY_KEY_REMOTE_SCHEMA_URL
