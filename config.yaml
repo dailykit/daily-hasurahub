@@ -1,6 +1,6 @@
 version: 2
-endpoint: https://prav3.dailykit.org/datahub
+endpoint: https://prav8.dailykit.org/datahub
 metadata_directory: metadata
 actions:
-  kind: synchronous
-  handler_webhook_baseurl: http://localhost:3000
+   kind: synchronous
+   handler_webhook_baseurl: http://localhost:3000

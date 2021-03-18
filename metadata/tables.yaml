@@ -4815,6 +4815,13 @@
         table:
           schema: products
           name: productOption
+  computed_fields:
+  - name: isValid
+    definition:
+      function:
+        schema: products
+        name: isProductValid
+    comment: ""
   select_permissions:
   - role: consumer
     permission:
