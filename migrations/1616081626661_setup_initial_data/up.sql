@@ -410,8 +410,8 @@ VALUES (
       '/insights',
       'https://s3.us-east-2.amazonaws.com/dailykit.org/app_icons/insights.png'
    ),
-   (11, 'Editor', '/editor'),
-   (12, 'Manage Content', '/content');
+   (11, 'Editor', '/editor',null),
+   (12, 'Manage Content', '/content',null);
 -- APP PERMISSIONS
 INSERT INTO settings."appPermission" ("appId", route, title, "fallbackMessage")
 VALUES -- Order App
@@ -879,8 +879,7 @@ VALUES (1, 1, 1),
    (9, 1, 9),
    (10, 1, 10),
    (11, 1, 11),
-   (12, 1, 12),
-;
+   (12, 1, 12);
 -- ROLE PERMISSIONS
 INSERT INTO settings."role_appPermission" ("role_appId", "appPermissionId", value)
 VALUES (1, 1000, true),

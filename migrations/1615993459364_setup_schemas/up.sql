@@ -4836,7 +4836,7 @@ COMMENT ON COLUMN brands."brand_paymentPartnership"."isActive" IS 'Whether this 
 
 CREATE TABLE brands."brand_storeSetting" ( "brandId" integer NOT NULL,
                                                              "storeSettingId" integer NOT NULL,
-                                                                                      value jsonb,
+                                                                                      value jsonb NOT NULL,
                                                                                                   "importHistoryId" integer);
 
 COMMENT ON TABLE brands."brand_storeSetting" IS 'This is a many to many table maintaining Ondemand Store setting for available brands.';
@@ -4863,7 +4863,7 @@ COMMENT ON COLUMN brands."brand_subscriptionStoreSetting".value IS 'This is the 
 
 CREATE TABLE brands."storeSetting" ( id integer NOT NULL,
                                                 identifier text NOT NULL,
-                                                                value jsonb NOT NULL,
+                                                                value jsonb,
                                                                             type text);
 
 COMMENT ON TABLE brands."storeSetting" IS 'This lists all the available settings for ondemand store.';
