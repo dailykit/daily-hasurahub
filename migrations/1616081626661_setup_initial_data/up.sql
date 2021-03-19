@@ -40,6 +40,186 @@ VALUES (
       6,
       'Order Delivered'
    );
+INSERT INTO "order"."orderMode" (
+      title,
+      description,
+      assets,
+      "validWhen"
+   )
+VALUES (
+      'basic',
+      NULL,
+      NULL,
+      'always'
+   ),
+   (
+      'assembledTogether',
+      NULL,
+      NULL,
+      'containsRecipe'
+   ),
+   (
+      'requisition',
+      NULL,
+      NULL,
+      'containsSupplierItem'
+   ),
+   (
+      'workOrderRequisition',
+      NULL,
+      NULL,
+      'sachetItem'
+   ),
+   (
+      'justInTimePortioning',
+      NULL,
+      NULL,
+      'bulkItem'
+   ),
+   (
+      'instruction',
+      NULL,
+      NULL,
+      NULL
+   ),
+   (
+      'cookOrder',
+      NULL,
+      NULL,
+      'recipe'
+   ),
+   (
+      'assembledSeparately',
+      NULL,
+      NULL,
+      'recipe'
+   );
+INSERT INTO products."productType" (title, "displayName")
+VALUES ('combo', 'Combo'),
+   ('simple', 'Simple'),
+   ('customizable', 'Customizable');
+INSERT INTO products."productOptionType" (
+      title,
+      description,
+      "orderMode"
+   )
+VALUES ('Grocery', NULL, 'requisition'),
+   (
+      'Meal Prep',
+      NULL,
+      'assembledTogether'
+   ),
+   (
+      'Ready to Cook',
+      NULL,
+      'assembledSeparately'
+   ),
+   (
+      'Microwave Ready',
+      NULL,
+      'assembledTogether'
+   ),
+   (
+      'inventory',
+      NULL,
+      'requisition'
+   ),
+   (
+      'mealKit',
+      NULL,
+      'assembledSeparately'
+   ),
+   (
+      'readyToEat',
+      NULL,
+      'cookOrder'
+   ),
+   (
+      'Meal Kit',
+      NULL,
+      'assembledSeparately'
+   );
+INSERT INTO "deviceHub"."labelTemplate" (id, name)
+VALUES (1000, 'product_kot1'),
+   (1001, 'sachet_kot1'),
+   (1002, 'product1'),
+   (1003, 'sachet1');
+INSERT INTO master.unit (id, name)
+VALUES (1001, 'kg'),
+   (1002, 'pcs'),
+   (1000, 'gm'),
+   (1004, 'pods'),
+   (1005, 'litre'),
+   (1006, 'ml'),
+   (1007, 'gallon'),
+   (1008, 'lb'),
+   (1009, 'oz'),
+   (1010, 'pinch');
+INSERT INTO master."accompanimentType" (id, name)
+VALUES (1000, 'Breads'),
+   (1001, 'Drinks');
+INSERT INTO master."allergenName" (id, name, description)
+VALUES (1000, 'Peanut', NULL);
+INSERT INTO master."cuisineName" (name, id)
+VALUES ('American', 1000),
+   ('Indian', 1001),
+   ('Thai', 1002),
+   ('Chinese', 1003),
+   ('French', 1004),
+   ('Burgers', 1005),
+   ('Pizza', 1006),
+   ('Italian', 1007),
+   ('Continental', 1008),
+   ('Seafood', 1009);
+INSERT INTO master."processingName" (id, name, description)
+VALUES (1000, 'Raw', NULL),
+   (1001, 'Sliced', NULL),
+   (1002, 'Chopped', NULL),
+   (1003, 'Puree', NULL),
+   (1004, 'Boiled', NULL),
+   (1005, 'Fried', NULL);
+INSERT INTO master."productCategory" (
+      name,
+      "imageUrl",
+      "iconUrl",
+      "metaDetails",
+      "importHistoryId"
+   )
+VALUES (
+      'Starters',
+      NULL,
+      NULL,
+      NULL,
+      NULL
+   ),
+   (
+      'Main Course',
+      NULL,
+      NULL,
+      NULL,
+      NULL
+   ),
+   (
+      'Desserts',
+      NULL,
+      NULL,
+      NULL,
+      NULL
+   ),
+   (
+      'Meal Kits',
+      NULL,
+      NULL,
+      NULL,
+      NULL
+   ),
+   (
+      'Ready to Eat',
+      NULL,
+      NULL,
+      NULL,
+      NULL
+   );
 --  NOTIFICATIONS
 INSERT INTO notifications."type" (
       id,
@@ -410,8 +590,8 @@ VALUES (
       '/insights',
       'https://s3.us-east-2.amazonaws.com/dailykit.org/app_icons/insights.png'
    ),
-   (11, 'Editor', '/editor',null),
-   (12, 'Manage Content', '/content',null);
+   (11, 'Editor', '/editor', null),
+   (12, 'Manage Content', '/content', null);
 -- APP PERMISSIONS
 INSERT INTO settings."appPermission" ("appId", route, title, "fallbackMessage")
 VALUES -- Order App
