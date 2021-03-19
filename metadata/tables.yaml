@@ -4482,7 +4482,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook: https://08e085bb8270.ngrok.io/event/order/third-party
+    webhook: '{{DAILYOS_SERVER_URL}}/event/order/third-party'
 - table:
     schema: packaging
     name: packaging

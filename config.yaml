@@ -1,6 +1,7 @@
 version: 2
-endpoint: https://prav8.dailykit.org/datahub
+endpoint: https://prav9.dailykit.org/datahub
 metadata_directory: metadata
+admin_secret: 5411b090-571b-4bf9-b714-c14efac22788
 actions:
-   kind: synchronous
-   handler_webhook_baseurl: http://localhost:3000
+  kind: synchronous
+  handler_webhook_baseurl: http://localhost:3000
