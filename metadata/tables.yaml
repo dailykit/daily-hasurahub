@@ -5353,6 +5353,8 @@
   - name: manageUser
     definition:
       enable_manual: true
+      insert:
+        columns: '*'
       delete:
         columns: '*'
       update:

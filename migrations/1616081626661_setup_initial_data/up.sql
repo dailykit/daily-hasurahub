@@ -322,28 +322,31 @@ INSERT INTO brands."brand" (
    )
 VALUES ('Default', true, true, true, true);
 -- SUBSCRIPTION STORE BRAND SETTINGS
-INSERT INTO brands."subscriptionStoreSetting" (type, identifier)
-VALUES ('Visual', 'priceDisplay'),
-   ('Visual', 'theme-color'),
-   ('brand', 'theme-brand'),
-   ('conventions', 'primary-labels'),
-   ('Navigation', 'navbar'),
-   ('conventions', 'steps-labels'),
-   ('Select-Plan', 'subscription-metadetails'),
-   ('Select-Plan', 'select-plan-header'),
-   ('Register', 'register-background'),
-   ('Select-Delivery', 'select-delivery-background'),
-   ('Select-Delivery', 'address'),
-   ('Select-Delivery', 'delivery-day'),
-   ('Select-Delivery', 'first-delivery'),
-   ('Select-Menu', 'select-menu-header'),
-   ('availability', 'Location'),
-   ('brand', 'Contact'),
-   ('rewards', 'Wallet'),
-   ('rewards', 'Loyalty Points'),
-   ('rewards', 'Coupons'),
-   ('rewards', 'Referral'),
-   ('Email Notification', 'email');
+INSERT INTO brands."subscriptionStoreSetting" (id, type, identifier)
+VALUES (1000, 'Visual', 'priceDisplay'),
+   (1001, 'Visual', 'theme-color'),
+   (1002, 'brand', 'theme-brand'),
+   (1003, 'conventions', 'primary-labels'),
+   (1004, 'conventions', 'steps-labels'),
+   (1005, 'Select-Plan', 'subscription-metadetails'),
+   (1006, 'Select-Plan', 'select-plan-header'),
+   (1007, 'Register', 'register-background'),
+   (
+      1008,
+      'Select-Delivery',
+      'select-delivery-background'
+   ),
+   (1009, 'Select-Delivery', 'address'),
+   (1010, 'Select-Delivery', 'delivery-day'),
+   (1011, 'Select-Delivery', 'first-delivery'),
+   (1012, 'Select-Menu', 'select-menu-header'),
+   (1013, 'availability', 'Location'),
+   (1014, 'brand', 'Contact'),
+   (1015, 'rewards', 'Wallet'),
+   (1016, 'rewards', 'Loyalty Points'),
+   (1017, 'rewards', 'Coupons'),
+   (1018, 'rewards', 'Referral'),
+   (1019, 'Email Notification', 'email');
 INSERT INTO brands."brand_subscriptionStoreSetting" ("brandId", "subscriptionStoreSettingId", value)
 VALUES (
       1000,

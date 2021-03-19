@@ -1,7 +1,7 @@
 version: 2
-endpoint: https://prav9.dailykit.org/datahub
+endpoint: https://manipur.dailykit.org/datahub
 metadata_directory: metadata
-admin_secret: 5411b090-571b-4bf9-b714-c14efac22788
+admin_secret: f902db26-8b34-43d8-86db-1737c1369f51
 actions:
-  kind: synchronous
-  handler_webhook_baseurl: http://localhost:3000
+   kind: synchronous
+   handler_webhook_baseurl: http://localhost:3000
