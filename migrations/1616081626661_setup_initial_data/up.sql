@@ -380,46 +380,56 @@ VALUES (
    ),
    (
       1000,
-      1007,
+      1006,
       '{"background":{"color":"#e0e9e8","image":""}}'
    ),
    (
       1000,
-      1009,
+      1007,
       '{"background":{"color":"#e4e4e4","image":"https://dailykit-133-test.s3.amazonaws.com/images/13699-4-3.jpg"}}'
    ),
    (
       1000,
-      1010,
+      1008,
+      '{"background":{"color":"#e4e4e4","image":"https://dailykit-133-test.s3.amazonaws.com/images/13699-4-3.jpg"}}'
+   ),
+   (
+      1000,
+      1009,
       '{"title":"Select Delivery Address","description":"Choose the delivery address you want the food delivered to"}'
    ),
    (
       1000,
-      1011,
+      1010,
       '{"title":"Select Delivery Day","description":"Choose the day you the deliveries on"}'
    ),
    (
       1000,
-      1013,
+      1011,
       '{"title":"Select First Delivery","description":"Choose first delivery date"}'
    ),
    (
       1000,
-      1014,
+      1012,
+      '{"background":{"color":"#e4e4e4","image":"https://dailykit-133-test.s3.amazonaws.com/images/13699-4-3.jpg"}}'
+   ),
+   (
+      1000,
+      1013,
       '{"lat":"33.8042896","lng":"-118.1709438","city":"Signal Hill","line1":"1700 East Willow Street","line2":"","state":"California","country":"United States","zipcode":"90755"}'
    ),
    (
       1000,
-      1015,
+      1014,
       '{"email":"test@dailykit.org","phoneNo":"+13124215900"}'
    ),
+   (1000, 1015, '{ "isAvailable": true }'),
    (1000, 1016, '{ "isAvailable": true }'),
    (1000, 1017, '{ "isAvailable": true }'),
    (1000, 1018, '{ "isAvailable": true }'),
-   (1000, 1019, '{ "isAvailable": true }'),
    (
       1000,
-      1020,
+      1019,
       '{ "name": "Subscription Shop", "email": "no-reply@dailykit.org", "template": { "data": { "id": "{{new.id}}" }, "template": { "name": "subscription", "type": "email", "format": "html" }}}'
    );
 --  STORE BRAND SETTING 
