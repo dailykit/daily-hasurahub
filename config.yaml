@@ -1,7 +1,7 @@
 version: 2
-endpoint: https://manipur.dailykit.org/datahub
+endpoint: https://mumbai.dailykit.org/datahub
 metadata_directory: metadata
-admin_secret: f902db26-8b34-43d8-86db-1737c1369f51
+admin_secret: 4a58f11d-a5b1-4f03-9173-7b96cfa6396e
 actions:
    kind: synchronous
    handler_webhook_baseurl: http://localhost:3000

@@ -5957,7 +5957,7 @@ CREATE TABLE settings.station_user ( "userKeycloakId" text NOT NULL,
 
 
 CREATE TABLE settings."user" ( id integer NOT NULL,
-                                          "firstName" text, "lastName" text, email text, "tempPassword" text, "phoneNo" text, "keycloakId" text);
+                                          "firstName" text, "lastName" text, email text, "tempPassword" text, "phoneNo" text, "keycloakId" text, "isOwner" boolean NOT NULL DEFAULT false);
 
 
 
@@ -6042,6 +6042,40 @@ CREATE TABLE website."websitePageModule" ( id integer NOT NULL,
                                                                                                                                                                                                                               config2 json,
                                                                                                                                                                                                                               config3 jsonb,
                                                                                                                                                                                                                               config4 text);
+
+
+
+CREATE OR REPLACE FUNCTION "settings".define_owner_role()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+
+role_Id int;
+
+BEGIN
+    IF NEW."isOwner" = true AND NEW."keycloakId" is not null THEN
+    
+    select "id" into role_Id from "settings"."role" where "title" = 'admin';
+    
+    insert into "settings"."user_role" ("userId", "roleId") values (
+    
+    NEW."keycloakId", role_Id
+    
+    );
+    END IF;
+    RETURN NULL;
+END;
+$function$;
+
+create trigger "defineOwnerRole"
+
+after update of
+
+"keycloakId" on
+
+"settings"."user" for each row execute procedure "settings"."define_owner_role"();
+
 
 
 ALTER TABLE ONLY brands.brand
