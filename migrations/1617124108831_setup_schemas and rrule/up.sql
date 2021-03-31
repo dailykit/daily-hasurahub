@@ -52,6 +52,8 @@ CREATE SCHEMA subscription;
 
 CREATE SCHEMA website;
 
+CREATE SCHEMA datahub_schema;
+
 CREATE TYPE public.summary AS (
     pending jsonb,
     underprocessing jsonb,
