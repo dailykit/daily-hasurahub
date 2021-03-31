@@ -31,3 +31,6 @@
 - function:
     schema: onDemand
     name: getStoreData
+- function:
+    schema: order
+    name: duplicateCartItem

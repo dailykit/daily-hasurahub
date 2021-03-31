@@ -47,14 +47,6 @@ input Attachment {
   path : String!
 }
 
-type Menu {
-  name : String
-  comboProducts : [Int]!
-  customizableProducts : [Int]!
-  inventoryProducts : [Int]!
-  simpleRecipeProducts : [Int!]
-}
-
 type PrintResponse {
   success : Boolean!
   message : String!
@@ -71,23 +63,13 @@ type PrintJobs {
   printer : jsonb
 }
 
-type EmailOutput {
-  success : Boolean!
-  message : String!
-}
-
-type GiveRewardsResponse {
-  success : Boolean
-  message : String
-}
-
-type PrintNode {
-  email : String!
-  password : String!
-}
-
 type ProcessRewardsResponse {
   success : Boolean
   message : String
+}
+
+type EmailOutput {
+  success : Boolean!
+  message : String!
 }
 

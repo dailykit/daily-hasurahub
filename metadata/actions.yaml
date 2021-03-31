@@ -21,11 +21,8 @@ custom_types:
   - name: EmailInput
   - name: Attachment
   objects:
-  - name: Menu
   - name: PrintResponse
   - name: PrintJobs
-  - name: EmailOutput
-  - name: GiveRewardsResponse
-  - name: PrintNode
   - name: ProcessRewardsResponse
+  - name: EmailOutput
   scalars: []
