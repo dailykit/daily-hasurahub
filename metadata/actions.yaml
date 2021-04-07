@@ -15,6 +15,14 @@ actions:
   definition:
     kind: synchronous
     handler: '{{DAILYOS_SERVER_URL}}/api/sendmail'
+- name: sendStripeInvoice
+  definition:
+    kind: synchronous
+    handler: https://dailykey.ngrok.io/api/webhooks/stripe/send-invoice
+    forward_client_headers: true
+    headers:
+    - name: Organization-Id
+      value_from_env: HEADER_REMOTE_SCHEMA_ORGANIZATIONID
 custom_types:
   enums: []
   input_objects:
@@ -25,4 +33,5 @@ custom_types:
   - name: PrintJobs
   - name: ProcessRewardsResponse
   - name: EmailOutput
+  - name: SendStripeInvoiceResponse
   scalars: []

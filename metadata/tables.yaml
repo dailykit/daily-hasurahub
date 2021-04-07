@@ -711,14 +711,6 @@
           name: cart
         column_mapping:
           id: customerId
-  - name: customerInsight
-    using:
-      manual_configuration:
-        remote_table:
-          schema: insights
-          name: test5
-        column_mapping:
-          source: source
   - name: customerReferrals
     using:
       foreign_key_constraint_on:
@@ -826,20 +818,18 @@
   - role: consumer
     permission:
       columns:
-      - id
-      - source
-      - email
-      - keycloakId
       - clientId
-      - isSubscriber
-      - subscriptionId
-      - subscriptionAddressId
-      - subscriptionPaymentMethodId
       - created_at
-      - updated_at
-      - isTest
-      - sourceBrandId
+      - email
+      - id
       - isArchived
+      - isSubscriber
+      - isTest
+      - keycloakId
+      - source
+      - sourceBrandId
+      - subscriptionId
+      - updated_at
       filter: {}
       allow_aggregations: true
   event_triggers:
@@ -908,9 +898,6 @@
       filter: {}
 - table:
     schema: crm
-    name: fact
-- table:
-    schema: crm
     name: loyaltyPoint
   configuration:
     custom_root_fields:
@@ -974,28 +961,6 @@
           name: rewardHistory
 - table:
     schema: crm
-    name: orderCart_rewards
-  configuration:
-    custom_root_fields:
-      insert: createOrderCartRewards
-      select_aggregate: orderCartRewardsAggregate
-      insert_one: createOrderCartReward
-      select_by_pk: orderCartReward
-      select: orderCartRewards
-      delete: deleteOrderCartRewards
-      update: updateOrderCartRewards
-      delete_by_pk: deleteOrderCartReward
-      update_by_pk: updateOrderCartReward
-    custom_column_names: {}
-  object_relationships:
-  - name: orderCart
-    using:
-      foreign_key_constraint_on: orderCartId
-  - name: reward
-    using:
-      foreign_key_constraint_on: rewardId
-- table:
-    schema: crm
     name: reward
   object_relationships:
   - name: campaign
@@ -1008,13 +973,6 @@
     using:
       foreign_key_constraint_on: couponId
   array_relationships:
-  - name: orderCarts
-    using:
-      foreign_key_constraint_on:
-        column: rewardId
-        table:
-          schema: crm
-          name: orderCart_rewards
   - name: rewardHistories
     using:
       foreign_key_constraint_on:
@@ -1157,6 +1115,120 @@
         table:
           schema: crm
           name: rewardHistory
+- table:
+    schema: datahub_schema
+    name: columns
+- table:
+    schema: datahub_schema
+    name: columns_privileges
+- table:
+    schema: datahub_schema
+    name: constraint_column_usage
+- table:
+    schema: datahub_schema
+    name: constraint_table_usage
+- table:
+    schema: datahub_schema
+    name: event_invocation_logs
+- table:
+    schema: datahub_schema
+    name: event_log
+- table:
+    schema: datahub_schema
+    name: event_triggers
+- table:
+    schema: datahub_schema
+    name: hdb_action
+- table:
+    schema: datahub_schema
+    name: hdb_action_log
+- table:
+    schema: datahub_schema
+    name: hdb_action_permission
+- table:
+    schema: datahub_schema
+    name: hdb_computed_field
+- table:
+    schema: datahub_schema
+    name: hdb_cron_event_invocation_logs
+- table:
+    schema: datahub_schema
+    name: hdb_cron_events
+- table:
+    schema: datahub_schema
+    name: hdb_cron_triggers
+- table:
+    schema: datahub_schema
+    name: hdb_custom_types
+- table:
+    schema: datahub_schema
+    name: hdb_function
+- table:
+    schema: datahub_schema
+    name: hdb_permission
+- table:
+    schema: datahub_schema
+    name: hdb_relationship
+- table:
+    schema: datahub_schema
+    name: hdb_remote_relationship
+- table:
+    schema: datahub_schema
+    name: hdb_scheduled_event_invocation_logs
+- table:
+    schema: datahub_schema
+    name: hdb_scheduled_events
+- table:
+    schema: datahub_schema
+    name: hdb_table
+- table:
+    schema: datahub_schema
+    name: key_column_usage
+- table:
+    schema: datahub_schema
+    name: referential_constraints
+- table:
+    schema: datahub_schema
+    name: remote_schemas
+- table:
+    schema: datahub_schema
+    name: role_column_grant
+- table:
+    schema: datahub_schema
+    name: routines
+- table:
+    schema: datahub_schema
+    name: schemata
+- table:
+    schema: datahub_schema
+    name: sequences
+- table:
+    schema: datahub_schema
+    name: table_constraints
+- table:
+    schema: datahub_schema
+    name: table_privileges
+- table:
+    schema: datahub_schema
+    name: tables
+- table:
+    schema: datahub_schema
+    name: triggered_update_column
+- table:
+    schema: datahub_schema
+    name: triggers
+- table:
+    schema: datahub_schema
+    name: view_column_usage
+- table:
+    schema: datahub_schema
+    name: view_routine_usage
+- table:
+    schema: datahub_schema
+    name: view_table_usage
+- table:
+    schema: datahub_schema
+    name: views
 - table:
     schema: deviceHub
     name: computer
@@ -2141,33 +2213,6 @@
 - table:
     schema: insights
     name: month
-- table:
-    schema: insights
-    name: test
-- table:
-    schema: insights
-    name: test1
-- table:
-    schema: insights
-    name: test2
-- table:
-    schema: insights
-    name: test3
-- table:
-    schema: insights
-    name: test4
-- table:
-    schema: insights
-    name: test5
-  array_relationships:
-  - name: customers
-    using:
-      manual_configuration:
-        remote_table:
-          schema: crm
-          name: customer
-        column_mapping:
-          source: source
 - table:
     schema: instructions
     name: instructionSet
@@ -3665,6 +3710,13 @@
         table:
           schema: crm
           name: loyaltyPointTransaction
+  - name: paymentHistories
+    using:
+      foreign_key_constraint_on:
+        column: cartId
+        table:
+          schema: order
+          name: stripePaymentHistory
   computed_fields:
   - name: addOnTotal
     definition:
@@ -3956,7 +4008,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook: https://dailyos-server.ngrok.io/api/initiate-payment
+    webhook: '{{DAILYOS_SERVER_URL}}/api/initiate-payment'
   - name: printKOT
     definition:
       enable_manual: true
@@ -3979,7 +4031,7 @@
       num_retries: 0
       interval_sec: 10
       timeout_sec: 60
-    webhook: '{{DAILYOS_SERVER_URL}}/api/order/status'
+    webhook: '{{DAILYOS_SERVER_URL}}/api/order/statuss'
 - table:
     schema: order
     name: cartItem
@@ -4545,6 +4597,9 @@
     name: ordersAggregate
 - table:
     schema: order
+    name: stripePaymentHistory
+- table:
+    schema: order
     name: thirdPartyOrder
   object_relationships:
   - name: order
@@ -4708,6 +4763,13 @@
           name: comboComponentOptions
         column_mapping:
           id: comboComponentId
+  computed_fields:
+  - name: fullName
+    definition:
+      function:
+        schema: products
+        name: comboProductComponentFullName
+    comment: ""
   select_permissions:
   - role: consumer
     permission:
@@ -4830,6 +4892,13 @@
           name: customizableComponentOptions
         column_mapping:
           id: customizableComponentId
+  computed_fields:
+  - name: fullName
+    definition:
+      function:
+        schema: products
+        name: customizableProductComponentFullName
+    comment: ""
   select_permissions:
   - role: consumer
     permission:
@@ -4960,12 +5029,6 @@
       allow_aggregations: true
 - table:
     schema: products
-    name: productConfigTemplate
-- table:
-    schema: products
-    name: productDataConfig
-- table:
-    schema: products
     name: productOption
   configuration:
     custom_root_fields:
@@ -5012,6 +5075,12 @@
       function:
         schema: products
         name: productOptionCartItem
+    comment: ""
+  - name: fullName
+    definition:
+      function:
+        schema: products
+        name: productOptionFullName
     comment: ""
   select_permissions:
   - role: consumer
@@ -5349,6 +5418,12 @@
       function:
         schema: rules
         name: numberOfCustomerReferred
+    comment: ""
+  - name: customerReferredByCode
+    definition:
+      function:
+        schema: rules
+        name: customerReferredByCode
     comment: ""
 - table:
     schema: safety

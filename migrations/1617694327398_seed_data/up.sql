@@ -43,6 +43,13 @@ VALUES
         'Order Delivered'
     );
 
+INSERT INTO "rules"."facts" (  id,
+    query) values (
+        1000,
+        'query Facts {       facts {          cartComboProduct(args: { params: { read: true } })          cartComboProductComponent(args: { params: { read: true } })          cartContainsAddOnProducts(args: { params: { read: true } })          cartCustomizableProduct(args: { params: { read: true } })          cartCustomizableProductComponent(args: { params: { read: true } })          cartItemTotal(args: { params: { read: true } })          cartInventoryProductOption(args: { params: { read: true } })          cartMealKitProductOption(args: { params: { read: true } })          cartReadyToEatProductOption(args: { params: { read: true } })          cartSimpleProduct(args: { params: { read: true } })          cartSubscriptionItemCount(args: { params: { read: true } })          cartSubscriptionServingSize(args: { params: { read: true } })          cartSubscriptionTitle(args: { params: { read: true } })          customerEmail(args: { params: { read: true } })          customerSubscriptionSkipCountWithDuration(             args: { params: { read: true } }          )          isCartSubscription(args: { params: { read: true } })          numberOfSubscriptionAddOnProducts(args: { params: { read: true } })          totalNumberOfCartReadyToEatProduct(args: { params: { read: true } })          totalNumberOfCartMealKitProduct(args: { params: { read: true } })          totalNumberOfCartInventoryProduct(args: { params: { read: true } })          totalNumberOfCartCustomizableProduct(args: { params: { read: true } })          totalNumberOfCartComboProduct(args: { params: { read: true } })          orderCountWithinDuration(args: { params: { read: true } })          customerReferredByCode(args: { params: { read: true } })       }    }'
+    )
+
+
 INSERT INTO
     "order"."orderMode" (
         title,

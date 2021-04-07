@@ -1,3 +1,1611 @@
+CREATE FUNCTION "order"."createSachets"() RETURNS trigger LANGUAGE plpgsql AS $ $ DECLARE inventorySachet "products"."inventoryProductBundleSachet";
+
+sachet "simpleRecipe"."simpleRecipeYield_ingredientSachet";
+
+counter int;
+
+modifierOption record;
+
+BEGIN IF NEW."simpleRecipeYieldId" IS NOT NULL THEN FOR sachet IN
+SELECT
+    *
+FROM
+    "simpleRecipe"."simpleRecipeYield_ingredientSachet"
+WHERE
+    "recipeYieldId" = NEW."simpleRecipeYieldId" LOOP IF sachet."ingredientSachetId" IS NOT NULL THEN
+INSERT INTO
+    "order"."cartItem"(
+        "parentCartItemId",
+        "ingredientSachetId",
+        "cartId"
+    )
+VALUES
+    (
+        NEW.id,
+        sachet."ingredientSachetId",
+        NEW."cartId"
+    );
+
+ELSEIF sachet."subRecipeYieldId" IS NOT NULL THEN
+INSERT INTO
+    "order"."cartItem"("parentCartItemId", "subRecipeYieldId", "cartId")
+VALUES
+    (NEW.id, sachet."subRecipeYieldId", NEW."cartId");
+
+END IF;
+
+END LOOP;
+
+ELSEIF NEW."inventoryProductBundleId" IS NOT NULL THEN FOR inventorySachet IN
+SELECT
+    *
+FROM
+    "products"."inventoryProductBundleSachet"
+WHERE
+    "inventoryProductBundleId" = NEW."inventoryProductBundleId" LOOP IF inventorySachet."sachetItemId" IS NOT NULL THEN
+INSERT INTO
+    "order"."cartItem"("parentCartItemId", "sachetItemId", "cartId")
+VALUES
+    (
+        NEW.id,
+        inventorySachet."sachetItemId",
+        NEW."cartId"
+    );
+
+END IF;
+
+END LOOP;
+
+ELSEIF NEW."subRecipeYieldId" IS NOT NULL THEN FOR sachet IN
+SELECT
+    *
+FROM
+    "simpleRecipe"."simpleRecipeYield_ingredientSachet"
+WHERE
+    "recipeYieldId" = NEW."subRecipeYieldId" LOOP IF sachet."ingredientSachetId" IS NOT NULL THEN
+INSERT INTO
+    "order"."cartItem"(
+        "parentCartItemId",
+        "ingredientSachetId",
+        "cartId"
+    )
+VALUES
+    (
+        NEW.id,
+        sachet."ingredientSachetId",
+        NEW."cartId"
+    );
+
+ELSEIF sachet."subRecipeYieldId" IS NOT NULL THEN
+INSERT INTO
+    "order"."cartItem"("parentCartItemId", "subRecipeYieldId", "cartId")
+VALUES
+    (NEW.id, sachet."subRecipeYieldId", NEW."cartId");
+
+END IF;
+
+END LOOP;
+
+ELSEIF NEW."modifierOptionId" IS NOT NULL THEN
+SELECT
+    *
+FROM
+    "onDemand"."modifierCategoryOption"
+WHERE
+    id = NEW."modifierOptionId" INTO modifierOption;
+
+counter := modifierOption.quantity;
+
+IF modifierOption."sachetItemId" IS NOT NULL THEN WHILE counter >= 1 LOOP
+INSERT INTO
+    "order"."cartItem"("parentCartItemId", "sachetItemId", "cartId")
+VALUES
+    (
+        NEW.id,
+        modifierOption."sachetItemId",
+        NEW."cartId"
+    );
+
+counter := counter - 1;
+
+END LOOP;
+
+ELSEIF modifierOption."simpleRecipeYieldId" IS NOT NULL THEN WHILE counter >= 1 LOOP
+INSERT INTO
+    "order"."cartItem"("parentCartItemId", "subRecipeYieldId", "cartId")
+VALUES
+    (
+        NEW.id,
+        modifierOption."simpleRecipeYieldId",
+        NEW."cartId"
+    );
+
+counter := counter - 1;
+
+END LOOP;
+
+ELSEIF modifierOption."ingredientSachetId" IS NOT NULL THEN WHILE counter >= 1 LOOP
+INSERT INTO
+    "order"."cartItem"(
+        "parentCartItemId",
+        "ingredientSachetId",
+        "cartId"
+    )
+VALUES
+    (
+        NEW.id,
+        modifierOption."ingredientSachetId",
+        NEW."cartId"
+    );
+
+counter := counter - 1;
+
+END LOOP;
+
+END IF;
+
+END IF;
+
+RETURN null;
+
+END;
+
+$ $;
+
+CREATE FUNCTION "order"."deliveryPrice"(cart "order".cart) RETURNS numeric LANGUAGE plpgsql STABLE AS $ $ DECLARE value numeric;
+
+total numeric;
+
+rangeId int;
+
+subscriptionId int;
+
+price numeric := 0;
+
+BEGIN IF cart."fulfillmentInfo" :: json ->> 'type' LIKE '%PICKUP'
+OR cart."fulfillmentInfo" IS NULL THEN RETURN 0;
+
+END IF;
+
+IF cart."source" = 'a-la-carte' THEN
+SELECT
+    "order"."itemTotal"(cart) into total;
+
+SELECT
+    cart."fulfillmentInfo" :: json #>'{"slot","mileRangeId"}' as int into rangeId;
+SELECT
+    charge
+from
+    "fulfilment"."charge"
+WHERE
+    charge."mileRangeId" = rangeId
+    AND total >= charge."orderValueFrom"
+    AND total < charge."orderValueUpto" into value;
+
+IF value IS NOT NULL THEN RETURN value;
+
+END IF;
+
+SELECT
+    MAX(charge)
+from
+    "fulfilment"."charge"
+WHERE
+    charge."mileRangeId" = rangeId into value;
+
+IF value IS NULL THEN RETURN 0;
+
+ELSE RETURN value;
+
+END IF;
+
+ELSE
+SELECT
+    "subscriptionId"
+FROM
+    crm."brand_customer"
+WHERE
+    "brandId" = cart."brandId"
+    AND "keycloakId" = cart."customerKeycloakId" INTO subscriptionId;
+
+SELECT
+    "deliveryPrice"
+FROM
+    subscription."subscription_zipcode"
+WHERE
+    "subscriptionId" = subscriptionId
+    AND zipcode = cart.address ->> 'zipcode' INTO price;
+
+RETURN COALESCE(price, 0);
+
+END IF;
+
+RETURN 0;
+
+END $ $;
+
+CREATE FUNCTION "order".discount(cart "order".cart) RETURNS numeric LANGUAGE plpgsql STABLE AS $ $ DECLARE totalPrice numeric;
+
+itemTotal numeric;
+
+deliveryPrice numeric;
+
+rewardIds int [];
+
+rewardId int;
+
+reward record;
+
+discount numeric := 0;
+
+BEGIN
+SELECT
+    "order"."itemTotal"(cart.*) into itemTotal;
+
+SELECT
+    "order"."deliveryPrice"(cart.*) into deliveryPrice;
+
+totalPrice := ROUND(itemTotal + deliveryPrice, 2);
+
+rewardIds := ARRAY(
+    SELECT
+        "rewardId"
+    FROM
+        "order"."cart_rewards"
+    WHERE
+        "cartId" = cart.id
+);
+
+FOREACH rewardId IN ARRAY rewardIds LOOP
+SELECT
+    *
+FROM
+    crm.reward
+WHERE
+    id = rewardId INTO reward;
+
+IF reward."type" = 'Discount' THEN IF reward."rewardValue" ->> 'type' = 'conditional' THEN discount := totalPrice * (
+    (reward."rewardValue" -> 'value' ->> 'percentage') :: numeric / 100
+);
+
+IF discount > (reward."rewardValue" -> 'value' ->> 'max') :: numeric THEN discount := (reward."rewardValue" -> 'value' ->> 'max') :: numeric;
+
+END IF;
+
+ELSIF reward."rewardValue" ->> 'type' = 'absolute' THEN discount := (reward."rewardValue" ->> 'value') :: numeric;
+
+ELSE discount := 0;
+
+END IF;
+
+END IF;
+
+END LOOP;
+
+IF discount > totalPrice THEN discount := totalPrice;
+
+END IF;
+
+RETURN ROUND(discount, 2);
+
+END;
+
+$ $;
+
+CREATE FUNCTION "order"."duplicateCartItem"(params jsonb) RETURNS SETOF public.response LANGUAGE plpgsql STABLE AS $ $ BEGIN PERFORM "order"."duplicateCartItemVolatile"(params);
+
+RETURN QUERY
+SELECT
+    true AS success,
+    'Item duplicated!' AS message;
+
+END;
+
+$ $;
+
+CREATE FUNCTION "order"."duplicateCartItemVolatile"(params jsonb) RETURNS SETOF void LANGUAGE plpgsql AS $ $ DECLARE currentItem record;
+
+item record;
+
+parentCartItemId int;
+
+BEGIN
+SELECT
+    *
+FROM
+    "order"."cartItem"
+WHERE
+    id = (params ->> 'cartItemId') :: int INTO item;
+
+INSERT INTO
+    "order"."cartItem"(
+        "cartId",
+        "parentCartItemId",
+        "isModifier",
+        "productId",
+        "productOptionId",
+        "comboProductComponentId",
+        "customizableProductComponentId",
+        "simpleRecipeYieldId",
+        "sachetItemId",
+        "unitPrice",
+        "ingredientSachetId",
+        "isAddOn",
+        "addOnPrice",
+        "inventoryProductBundleId",
+        "modifierOptionId",
+        "subRecipeYieldId"
+    )
+VALUES
+    (
+        item."cartId",
+        (params ->> 'parentCartItemId') :: int,
+        item."isModifier",
+        item."productId",
+        item."productOptionId",
+        item."comboProductComponentId",
+        item."customizableProductComponentId",
+        item."simpleRecipeYieldId",
+        item."sachetItemId",
+        item."unitPrice",
+        item."ingredientSachetId",
+        item."isAddOn",
+        item."addOnPrice",
+        item."inventoryProductBundleId",
+        item."modifierOptionId",
+        item."subRecipeYieldId"
+    ) RETURNING id INTO parentCartItemId;
+
+FOR currentItem IN
+SELECT
+    *
+FROM
+    "order"."cartItem"
+WHERE
+    "parentCartItemId" = item.id LOOP IF currentItem."ingredientSachetId" IS NULL
+    AND currentItem."sachetItemId" IS NULL
+    AND currentItem."subRecipeYieldId" IS NULL THEN PERFORM "order"."duplicateCartItemVolatile"(
+        jsonb_build_object(
+            'cartItemId',
+            currentItem.id,
+            'parentCartItemId',
+            parentCartItemId
+        )
+    );
+
+END IF;
+
+END LOOP;
+
+END;
+
+$ $;
+
+CREATE FUNCTION "order"."handleProductOption"() RETURNS trigger LANGUAGE plpgsql AS $ $ DECLARE cart "order"."cart";
+
+productOption products."productOption";
+
+mode text;
+
+validFor text;
+
+counter int := 0;
+
+sachet "simpleRecipe"."simpleRecipeYield_ingredientSachet";
+
+BEGIN IF NEW."productOptionId" IS NULL THEN RETURN NULL;
+
+END IF;
+
+SELECT
+    *
+from
+    "order"."cart"
+WHERE
+    id = NEW.cartId INTO cart;
+
+IF cart."paymentStatus" = 'SUCCEEDED' THEN
+SELECT
+    * INTO productOption
+FROM
+    products."productOption"
+WHERE
+    id = NEW."productOptionId";
+
+SELECT
+    "orderMode" INTO mode
+FROM
+    products."productOptionType"
+WHERE
+    title = productOption."type";
+
+SELECT
+    "validWhen" INTO validFor
+FROM
+    "order"."orderMode"
+WHERE
+    title = mode;
+
+IF validFor = 'recipe' THEN counter := productOption.quantity;
+
+WHILE counter >= 1 LOOP
+INSERT INTO
+    "order"."cartItem"("parentCartItemId", "simpleRecipeYieldId")
+VALUES
+    (NEW.id, productOption."simpleRecipeYieldId") RETURNING id;
+
+FOR sachet IN
+SELECT
+    *
+FROM
+    "simpleRecipe"."simpleRecipeYield_ingredientSachet"
+WHERE
+    "recipeYieldId" = productOption."simpleRecipeYieldId" LOOP
+INSERT INTO
+    "order"."cartItem"("parentCartItemId", "ingredientSachetId")
+VALUES
+    (id, sachet."ingredientSachetId");
+
+END LOOP;
+
+counter := counter - 1;
+
+END LOOP;
+
+ELSIF validFor = 'sachetItem' THEN counter := productOption.quantity;
+
+WHILE counter >= 1 LOOP
+INSERT INTO
+    "order"."cartItem"("parentCartItemId", "sachetItemId")
+VALUES
+    (NEW.id, productOption."sachetItemId") RETURNING id;
+
+counter := counter - 1;
+
+END LOOP;
+
+END IF;
+
+END IF;
+
+RETURN NULL;
+
+END;
+
+$ $;
+
+CREATE FUNCTION "order"."handleSubscriberStatus"() RETURNS trigger LANGUAGE plpgsql AS $ $ BEGIN IF NEW."paymentStatus" = 'PENDING'
+OR NEW."subscriptionOccurenceId" IS NULL THEN RETURN NULL;
+
+END IF;
+
+UPDATE
+    crm."customer"
+SET
+    "isSubscriber" = true
+WHERE
+    "keycloakId" = NEW."customerKeycloakId";
+
+UPDATE
+    crm."brand_customer"
+SET
+    "isSubscriber" = true
+WHERE
+    "brandId" = NEW."brandId"
+    AND "keycloakId" = NEW."customerKeycloakId";
+
+RETURN NULL;
+
+END;
+
+$ $;
+
+CREATE FUNCTION "order"."isCartValid"(cart "order".cart) RETURNS jsonb LANGUAGE plpgsql STABLE AS $ _ $ DECLARE totalPrice numeric := 0;
+
+res jsonb;
+
+productsCount int := 0;
+
+BEGIN
+SELECT
+    "order"."totalPrice"(cart.*) INTO totalPrice;
+
+SELECT
+    count(*) INTO productsCount
+FROM
+    "order"."cartItem"
+WHERE
+    "cartId" = cart.id;
+
+IF productsCount = 0 THEN res := json_build_object('status', false, 'error', 'No items in cart!');
+
+ELSIF cart."customerInfo" IS NULL
+OR cart."customerInfo" ->> 'customerFirstName' IS NULL THEN res := json_build_object(
+    'status',
+    false,
+    'error',
+    'Basic customer details missing!'
+);
+
+ELSIF cart."fulfillmentInfo" IS NULL THEN res := json_build_object(
+    'status',
+    false,
+    'error',
+    'No fulfillment mode selected!'
+);
+
+ELSIF cart."fulfillmentInfo" IS NOT NULL
+AND cart.status = 'PENDING' THEN
+SELECT
+    "order"."validateFulfillmentInfo"(cart."fulfillmentInfo", cart."brandId") INTO res;
+
+IF (res ->> 'status') :: boolean = false THEN PERFORM "order"."clearFulfillmentInfo"(cart.id);
+
+END IF;
+
+ELSIF cart."address" IS NULL
+AND cart."fulfillmentInfo" :: json ->> 'type' LIKE '%DELIVERY' THEN res := json_build_object(
+    'status',
+    false,
+    'error',
+    'No address selected for delivery!'
+);
+
+ELSIF totalPrice > 0
+AND totalPrice <= 0.5 THEN res := json_build_object(
+    'status',
+    false,
+    'error',
+    'Transaction amount should be greater than $0.5!'
+);
+
+ELSE res := jsonb_build_object('status', true, 'error', '');
+
+END IF;
+
+RETURN res;
+
+END $ _ $;
+
+CREATE FUNCTION "order"."isTaxIncluded"(cart "order".cart) RETURNS boolean LANGUAGE plpgsql STABLE AS $ $ DECLARE subscriptionId int;
+
+itemCountId int;
+
+taxIncluded boolean;
+
+BEGIN IF cart."subscriptionOccurenceId" IS NOT NULL THEN
+SELECT
+    "subscriptionId" INTO subscriptionId
+FROM
+    subscription."subscriptionOccurence"
+WHERE
+    id = cart."subscriptionOccurenceId";
+
+SELECT
+    "subscriptionItemCountId" INTO itemCountId
+FROM
+    subscription.subscription
+WHERE
+    id = subscriptionId;
+
+SELECT
+    "isTaxIncluded" INTO taxIncluded
+FROM
+    subscription."subscriptionItemCount"
+WHERE
+    id = itemCountId;
+
+RETURN taxIncluded;
+
+END IF;
+
+RETURN false;
+
+END;
+
+$ $;
+
+CREATE FUNCTION "order"."itemTotal"(cart "order".cart) RETURNS numeric LANGUAGE plpgsql STABLE AS $ $ DECLARE total numeric;
+
+BEGIN
+SELECT
+    SUM("unitPrice") INTO total
+FROM
+    "order"."cartItem"
+WHERE
+    "cartId" = cart."id";
+
+RETURN COALESCE(total, 0);
+
+END;
+
+$ $;
+
+CREATE
+OR REPLACE FUNCTION "order"."loyaltyPointsUsable"(cart "order".cart) RETURNS integer LANGUAGE plpgsql STABLE AS $ function $ DECLARE setting record;
+
+temp record;
+
+itemTotal numeric;
+
+deliveryPrice numeric;
+
+tax numeric;
+
+discount numeric;
+
+totalPrice numeric;
+
+amount numeric;
+
+rate numeric;
+
+pointsUsable int := 0;
+
+balance int;
+
+BEGIN
+SELECT
+    *
+FROM
+    brands."storeSetting"
+WHERE
+    "identifier" = 'Loyalty Points Usage'
+    AND "type" = 'rewards' INTO setting;
+
+SELECT
+    *
+FROM
+    brands."brand_storeSetting"
+WHERE
+    "storeSettingId" = setting.id
+    AND "brandId" = cart."brandId" INTO temp;
+
+IF temp IS NOT NULL THEN setting := temp;
+
+END IF;
+
+IF setting IS NULL THEN RETURN pointsUsable;
+
+END IF;
+
+SELECT
+    "order"."totalPrice"(cart.*) into totalPrice;
+
+totalPrice := ROUND(totalPrice - cart."walletAmountUsed", 2);
+
+amount := ROUND(
+    totalPrice * ((setting.value ->> 'percentage') :: float / 100)
+);
+
+IF amount > (setting.value ->> 'max') :: int THEN amount := (setting.value ->> 'max') :: int;
+
+END IF;
+
+SELECT
+    crm."getLoyaltyPointsConversionRate"(cart."brandId") INTO rate;
+
+pointsUsable = ROUND(amount / rate);
+
+SELECT
+    points
+FROM
+    crm."loyaltyPoint"
+WHERE
+    "keycloakId" = cart."customerKeycloakId"
+    AND "brandId" = cart."brandId" INTO balance;
+
+IF pointsUsable > balance THEN pointsUsable := balance;
+
+END IF;
+
+-- if usable changes after cart update, then update used points
+IF cart."loyaltyPointsUsed" > pointsUsable THEN PERFORM crm."setLoyaltyPointsUsedInCart"(cart.id, pointsUsable);
+
+END IF;
+
+RETURN pointsUsable;
+
+END;
+
+$ function $;
+
+CREATE FUNCTION "order"."onPaymentSuccess"() RETURNS trigger LANGUAGE plpgsql AS $ $ DECLARE cart "order"."cart";
+
+tax numeric := 0;
+
+itemTotal numeric := 0;
+
+deliveryPrice numeric := 0;
+
+totalPrice numeric := 0;
+
+BEGIN IF (
+    SELECT
+        COUNT(*)
+    FROM
+        "order"."order"
+    WHERE
+        "cartId" = NEW."id"
+) > 0 THEN RETURN NULL;
+
+END IF;
+
+IF NEW."paymentStatus" != 'PENDING' THEN
+SELECT
+    *
+from
+    "order"."cart"
+WHERE
+    id = NEW.id INTO cart;
+
+SELECT
+    "order"."itemTotal"(cart.*) INTO itemTotal;
+
+SELECT
+    "order"."tax"(cart.*) INTO tax;
+
+SELECT
+    "order"."deliveryPrice"(cart.*) INTO deliveryPrice;
+
+SELECT
+    "order"."totalPrice"(cart.*) INTO totalPrice;
+
+INSERT INTO
+    "order"."order"(
+        "cartId",
+        "tip",
+        "tax",
+        "itemTotal",
+        "deliveryPrice",
+        "fulfillmentType",
+        "amountPaid",
+        "keycloakId",
+        "brandId"
+    )
+VALUES
+    (
+        NEW.id,
+        NEW.tip,
+        tax,
+        itemTotal,
+        deliveryPrice,
+        NEW."fulfillmentInfo" ->> 'type',
+        totalPrice,
+        NEW."customerKeycloakId",
+        NEW."brandId"
+    );
+
+UPDATE
+    "order"."cart"
+SET
+    "orderId" = (
+        SELECT
+            id
+        FROM
+            "order"."order"
+        WHERE
+            "cartId" = NEW.id
+    ),
+    status = 'ORDER_PENDING'
+WHERE
+    id = NEW.id;
+
+END IF;
+
+RETURN NULL;
+
+END;
+
+$ $;
+
+CREATE FUNCTION "order".on_cart_item_status_change() RETURNS trigger LANGUAGE plpgsql AS $ $ DECLARE totalReady integer := 0;
+
+totalPacked integer := 0;
+
+totalItems integer := 0;
+
+BEGIN IF NEW.status = OLD.status THEN RETURN NULL;
+
+END IF;
+
+-- mark children packed if parent ready/packed
+IF NEW.status = 'READY'
+OR NEW.status = 'PACKED' THEN
+UPDATE
+    "order"."cartItem"
+SET
+    status = 'PACKED'
+WHERE
+    "parentCartItemId" = NEW.id;
+
+END IF;
+
+IF NEW.status = 'READY_FOR_PACKING'
+OR NEW.status = 'READY' THEN IF NEW."parentCartItemId" IS NULL THEN
+UPDATE
+    "order"."cartItem"
+SET
+    status = 'PACKED'
+WHERE
+    id = NEW.id;
+
+-- product
+ELSEIF (
+    SELECT
+        "parentCartItemId"
+    FROM
+        "order"."cartItem"
+    WHERE
+        id = NEW."parentCartItemId"
+) IS NULL THEN
+UPDATE
+    "order"."cartItem"
+SET
+    status = 'PACKED'
+WHERE
+    id = NEW.id;
+
+-- productComponent
+END IF;
+
+END IF;
+
+IF NEW.status = 'READY' THEN
+SELECT
+    COUNT(*) INTO totalReady
+FROM
+    "order"."cartItem"
+WHERE
+    "parentCartItemId" = NEW."parentCartItemId"
+    AND status = 'READY';
+
+SELECT
+    COUNT(*) INTO totalItems
+FROM
+    "order"."cartItem"
+WHERE
+    "parentCartItemId" = NEW."parentCartItemId";
+
+IF totalReady = totalItems THEN
+UPDATE
+    "order"."cartItem"
+SET
+    status = 'READY_FOR_PACKING'
+WHERE
+    id = NEW."parentCartItemId";
+
+END IF;
+
+END IF;
+
+IF NEW.status = 'PACKED' THEN
+SELECT
+    COUNT(*) INTO totalPacked
+FROM
+    "order"."cartItem"
+WHERE
+    "parentCartItemId" = NEW."parentCartItemId"
+    AND status = 'PACKED';
+
+SELECT
+    COUNT(*) INTO totalItems
+FROM
+    "order"."cartItem"
+WHERE
+    "parentCartItemId" = NEW."parentCartItemId";
+
+IF totalPacked = totalItems THEN
+UPDATE
+    "order"."cartItem"
+SET
+    status = 'READY'
+WHERE
+    id = NEW."parentCartItemId"
+    AND status = 'PENDING';
+
+END IF;
+
+END IF;
+
+-- check order item status
+IF (
+    SELECT
+        status
+    FROM
+        "order".cart
+    WHERE
+        id = NEW."cartId"
+) = 'ORDER_PENDING' THEN
+UPDATE
+    "order".cart
+SET
+    status = 'ORDER_UNDER_PROCESSING'
+WHERE
+    id = NEW."cartId";
+
+END IF;
+
+IF NEW."parentCartItemId" IS NOT NULL THEN RETURN NULL;
+
+END IF;
+
+SELECT
+    COUNT(*) INTO totalReady
+FROM
+    "order"."cartItem"
+WHERE
+    "parentCartItemId" IS NULL
+    AND "cartId" = NEW."cartId"
+    AND status = 'READY';
+
+SELECT
+    COUNT(*) INTO totalPacked
+FROM
+    "order"."cartItem"
+WHERE
+    "parentCartItemId" IS NULL
+    AND "cartId" = NEW."cartId"
+    AND status = 'PACKED';
+
+SELECT
+    COUNT(*) INTO totalItems
+FROM
+    "order"."cartItem"
+WHERE
+    "parentCartItemId" IS NULL
+    AND "cartId" = NEW."cartId";
+
+IF totalReady = totalItems THEN
+UPDATE
+    "order".cart
+SET
+    status = 'ORDER_READY_TO_ASSEMBLE'
+WHERE
+    id = NEW."cartId";
+
+ELSEIF totalPacked = totalItems THEN
+UPDATE
+    "order".cart
+SET
+    status = 'ORDER_READY_TO_DISPATCH'
+WHERE
+    id = NEW."cartId";
+
+END IF;
+
+RETURN NULL;
+
+END;
+
+$ $;
+
+CREATE FUNCTION "order".on_cart_status_change() RETURNS trigger LANGUAGE plpgsql AS $ $ DECLARE item "order"."cartItem";
+
+packedCount integer := 0;
+
+readyCount integer := 0;
+
+BEGIN IF OLD.status = NEW.status THEN RETURN NULL;
+
+END IF;
+
+IF NEW.status = 'ORDER_READY_TO_ASSEMBLE' THEN FOR item IN
+SELECT
+    *
+FROM
+    "order"."cartItem"
+WHERE
+    "parentCartItemId" IS NULL
+    AND "cartId" = NEW.id LOOP
+UPDATE
+    "order"."cartItem"
+SET
+    status = 'READY'
+WHERE
+    id = item.id;
+
+END LOOP;
+
+ELSEIF NEW.status = 'ORDER_READY_FOR_DISPATCH' THEN FOR item IN
+SELECT
+    *
+FROM
+    "order"."cartItem"
+WHERE
+    "parentCartItemId" IS NULL
+    AND "cartId" = NEW.id LOOP
+UPDATE
+    "order"."cartItem"
+SET
+    status = 'PACKED'
+WHERE
+    id = item.id;
+
+END LOOP;
+
+ELSEIF NEW.status = 'ORDER_OUT_FOR_DELIVERY'
+OR NEW.status = 'ORDER_DELIVERED' THEN FOR item IN
+SELECT
+    *
+FROM
+    "order"."cartItem"
+WHERE
+    "parentCartItemId" IS NULL
+    AND "cartId" = NEW.id LOOP
+UPDATE
+    "order"."cartItem"
+SET
+    status = 'PACKED'
+WHERE
+    id = item.id;
+
+END LOOP;
+
+END IF;
+
+RETURN NULL;
+
+END;
+
+$ $;
+
+CREATE FUNCTION "order".ordersummary(order_row "order"."order") RETURNS jsonb LANGUAGE plpgsql STABLE AS $ $ DECLARE counts jsonb;
+
+amounts jsonb;
+
+BEGIN
+SELECT
+    json_object_agg(each."orderStatus", each."count")
+FROM
+    (
+        SELECT
+            "orderStatus",
+            COUNT (*)
+        FROM
+            "order"."order"
+        GROUP BY
+            "orderStatus"
+    ) AS each into counts;
+
+SELECT
+    json_object_agg(each."orderStatus", each."total")
+FROM
+    (
+        SELECT
+            "orderStatus",
+            SUM ("itemTotal") as total
+        FROM
+            "order"."order"
+        GROUP BY
+            "orderStatus"
+    ) AS each into amounts;
+
+RETURN json_build_object('count', counts, 'amount', amounts);
+
+END $ $;
+
+CREATE FUNCTION "order".set_current_timestamp_updated_at() RETURNS trigger LANGUAGE plpgsql AS $ $ DECLARE _new record;
+
+BEGIN _new := NEW;
+
+_new."updated_at" = NOW();
+
+RETURN _new;
+
+END;
+
+$ $;
+
+CREATE FUNCTION "order"."subTotal"(cart "order".cart) RETURNS numeric LANGUAGE plpgsql STABLE AS $ $ DECLARE amount numeric := 0;
+
+discount numeric := 0;
+
+itemTotal numeric;
+
+deliveryPrice numeric;
+
+BEGIN
+SELECT
+    "order"."itemTotal"(cart.*) into itemTotal;
+
+SELECT
+    "order"."deliveryPrice"(cart.*) into deliveryPrice;
+
+SELECT
+    "order".discount(cart.*) into discount;
+
+amount := itemTotal + deliveryPrice + cart.tip - discount;
+
+RETURN amount;
+
+END $ $;
+
+CREATE FUNCTION "order".tax(cart "order".cart) RETURNS numeric LANGUAGE plpgsql STABLE AS $ $ DECLARE taxAmount numeric := 0;
+
+amount numeric := 0;
+
+tax numeric;
+
+isTaxIncluded boolean;
+
+BEGIN
+SELECT
+    "order"."isTaxIncluded"(cart.*) INTO isTaxIncluded;
+
+SELECT
+    "order"."subTotal"(cart.*) into amount;
+
+SELECT
+    "order"."taxPercent"(cart.*) into tax;
+
+IF isTaxIncluded = true THEN RETURN ROUND((tax * amount) /(100 + tax), 2);
+
+END IF;
+
+RETURN ROUND(amount * (tax / 100), 2);
+
+END;
+
+$ $;
+
+CREATE FUNCTION "order"."taxPercent"(cart "order".cart) RETURNS numeric LANGUAGE plpgsql STABLE AS $ $ DECLARE taxPercent numeric := 0;
+
+percentage jsonb;
+
+subscriptionId int;
+
+itemCountId int;
+
+BEGIN IF cart."subscriptionOccurenceId" IS NOT NULL THEN
+SELECT
+    "subscriptionId" INTO subscriptionId
+FROM
+    subscription."subscriptionOccurence"
+WHERE
+    id = cart."subscriptionOccurenceId";
+
+SELECT
+    "subscriptionItemCountId" INTO itemCountId
+FROM
+    subscription.subscription
+WHERE
+    id = subscriptionId;
+
+SELECT
+    "tax" INTO taxPercent
+FROM
+    subscription."subscriptionItemCount"
+WHERE
+    id = itemCountId;
+
+RETURN taxPercent;
+
+ELSEIF cart."subscriptionOccurenceId" IS NULL THEN
+SELECT
+    value
+FROM
+    brands."brand_storeSetting"
+WHERE
+    "brandId" = cart."brandId"
+    AND "storeSettingId" = (
+        SELECT
+            id
+        FROM
+            brands."storeSetting"
+        WHERE
+            identifier = 'Tax Percentage'
+    ) INTO percentage;
+
+RETURN (percentage ->> 'value') :: numeric;
+
+ELSE RETURN 2.5;
+
+END IF;
+
+END;
+
+$ $;
+
+CREATE FUNCTION "order"."totalPrice"(cart "order".cart) RETURNS numeric LANGUAGE plpgsql STABLE AS $ $ DECLARE totalPrice numeric;
+
+tax numeric;
+
+rate numeric;
+
+loyaltyPointsAmount numeric := 0;
+
+subTotal numeric;
+
+isTaxIncluded boolean;
+
+BEGIN
+SELECT
+    "order"."subTotal"(cart.*) INTO subTotal;
+
+SELECT
+    "order".tax(cart.*) into tax;
+
+SELECT
+    "order"."isTaxIncluded"(cart.*) INTO isTaxIncluded;
+
+IF cart."loyaltyPointsUsed" > 0 THEN
+SELECT
+    crm."getLoyaltyPointsConversionRate"(cart."brandId") INTO rate;
+
+loyaltyPointsAmount := ROUND(rate * cart."loyaltyPointsUsed", 2);
+
+END IF;
+
+IF isTaxIncluded = true THEN totalPrice := ROUND(
+    subTotal - COALESCE(cart."walletAmountUsed", 0) - loyaltyPointsAmount,
+    2
+);
+
+ELSE totalPrice := ROUND(
+    subTotal - COALESCE(cart."walletAmountUsed", 0) - loyaltyPointsAmount + tax,
+    2
+);
+
+END IF;
+
+RETURN totalPrice;
+
+END $ $;
+
+CREATE FUNCTION "order"."updateStatementDescriptor"() RETURNS trigger LANGUAGE plpgsql AS $ $ DECLARE setting jsonb;
+
+statementDescriptor text := 'food order';
+
+BEGIN IF NEW.source = 'a-la-carte' then
+SELECT
+    "value"
+from
+    "brands"."brand_storeSetting"
+where
+    "brandId" = NEW."brandId"
+    and "storeSettingId" = (
+        select
+            id
+        from
+            "brands"."storeSetting"
+        where
+            "identifier" = 'Statement Descriptor'
+    ) into setting;
+
+ELSIF NEW.source = 'subscription' then
+SELECT
+    "value"
+from
+    "brands"."brand_subscriptionStoreSetting"
+where
+    "brandId" = NEW."brandId"
+    and "subscriptionStoreSettingId" = (
+        select
+            id
+        from
+            "brands"."subscriptionStoreSetting"
+        where
+            "identifier" = 'Statement Descriptor'
+    ) into setting;
+
+END IF;
+
+UPDATE
+    "order"."cart"
+SET
+    "statementDescriptor" = setting ->> 'value'
+where
+    id = NEW.id;
+
+RETURN NULL;
+
+END;
+
+$ $;
+
+CREATE FUNCTION "order"."validateFulfillmentInfo"(f jsonb, brandidparam integer) RETURNS jsonb LANGUAGE plpgsql STABLE AS $ $ DECLARE res jsonb;
+
+recurrence record;
+
+timeslot record;
+
+slotFrom time;
+
+slotUpto time;
+
+slotDate timestamp;
+
+isValid boolean;
+
+err text := '';
+
+BEGIN IF (f -> 'slot' ->> 'from') :: timestamp > NOW() :: timestamp THEN IF f ->> 'type' = 'ONDEMAND_DELIVERY' THEN -- FOR recurrence IN SELECT * FROM fulfilment.recurrence WHERE "type" = 'ONDEMAND_DELIVERY' LOOP
+--     IF recurrence.psql_rrule::_rrule.rruleset @> NOW()::TIMESTAMP WITHOUT TIME ZONE THEN
+--         FOR timeslot IN SELECT * FROM fulfilment."timeSlot" WHERE "recurrenceId" = recurrence.id LOOP
+--             IF timeslot."from" < CURRENT_TIME AND timeslot."to" > CURRENT_TIME THEN
+--                 res := json_build_object('status', true, 'error', 'Valid date and time!');
+--             ELSE
+--                 res := json_build_object('status', false, 'error', 'Invalid time!');
+--             END IF;
+--         END LOOP;
+--     ELSE
+--         res := json_build_object('status', false, 'error', 'Invalid date!');    
+--     END IF;
+-- END LOOP;
+SELECT
+    *
+FROM
+    fulfilment."timeSlot"
+WHERE
+    id = (
+        SELECT
+            "timeSlotId"
+        FROM
+            fulfilment."mileRange"
+        WHERE
+            id = (f -> 'slot' ->> 'mileRangeId') :: int
+            AND "isActive" = true
+    )
+    AND "isActive" = true INTO timeslot;
+
+IF timeslot."from" < CURRENT_TIME
+AND timeslot."to" > CURRENT_TIME THEN
+SELECT
+    *
+FROM
+    fulfilment.recurrence
+WHERE
+    id = timeslot."recurrenceId"
+    AND "isActive" = true INTO recurrence;
+
+IF recurrence IS NOT NULL
+AND recurrence.psql_rrule :: _rrule.rruleset @ > NOW() :: TIMESTAMP WITHOUT TIME ZONE THEN res := json_build_object('status', true, 'error', 'Valid date and time!');
+
+ELSE res := json_build_object('status', false, 'error', 'Invalid date!');
+
+END IF;
+
+ELSE res := json_build_object('status', false, 'error', 'Invalid time!');
+
+END IF;
+
+ELSIF f ->> 'type' = 'PREORDER_DELIVERY' THEN slotFrom := substring(f -> 'slot' ->> 'from', 12, 8) :: time;
+
+slotUpto := substring(f -> 'slot' ->> 'to', 12, 8) :: time;
+
+slotDate := substring(f -> 'slot' ->> 'from', 0, 11) :: timestamp;
+
+SELECT
+    *
+FROM
+    fulfilment."timeSlot"
+WHERE
+    id = (
+        SELECT
+            "timeSlotId"
+        FROM
+            fulfilment."mileRange"
+        WHERE
+            id = (f -> 'slot' ->> 'mileRangeId') :: int
+            AND "isActive" = true
+    )
+    AND "isActive" = true INTO timeslot;
+
+IF timeslot."from" < slotFrom
+AND timeslot."to" > slotFrom THEN -- lead time is already included in the slot (front-end)
+SELECT
+    *
+FROM
+    fulfilment.recurrence
+WHERE
+    id = timeslot."recurrenceId"
+    AND "isActive" = true INTO recurrence;
+
+IF recurrence IS NOT NULL
+AND recurrence.psql_rrule :: _rrule.rruleset @ > slotDate THEN res := json_build_object('status', true, 'error', 'Valid date and time!');
+
+ELSE res := json_build_object('status', false, 'error', 'Invalid date!');
+
+END IF;
+
+ELSE res := json_build_object('status', false, 'error', 'Invalid time!');
+
+END IF;
+
+ELSIF f ->> 'type' = 'ONDEMAND_PICKUP' THEN slotFrom := substring(f -> 'slot' ->> 'from', 12, 8) :: time;
+
+slotUpto := substring(f -> 'slot' ->> 'to', 12, 8) :: time;
+
+slotDate := substring(f -> 'slot' ->> 'from', 0, 11) :: timestamp;
+
+isValid := false;
+
+FOR recurrence IN
+SELECT
+    *
+FROM
+    fulfilment.recurrence
+WHERE
+    "type" = 'ONDEMAND_PICKUP'
+    AND "isActive" = true
+    AND id IN (
+        SELECT
+            "recurrenceId"
+        FROM
+            fulfilment.brand_recurrence
+        WHERE
+            "brandId" = brandIdParam
+    ) LOOP IF recurrence.psql_rrule :: _rrule.rruleset @ > NOW() :: TIMESTAMP WITHOUT TIME ZONE THEN FOR timeslot IN
+SELECT
+    *
+FROM
+    fulfilment."timeSlot"
+WHERE
+    "recurrenceId" = recurrence.id
+    AND "isActive" = true LOOP IF timeslot."from" < slotFrom
+    AND timeslot."to" > slotFrom THEN isValid := true;
+
+EXIT;
+
+END IF;
+
+END LOOP;
+
+IF isValid = false THEN err := 'No time slot available!';
+
+END IF;
+
+END IF;
+
+END LOOP;
+
+res := json_build_object('status', isValid, 'error', err);
+
+ELSE slotFrom := substring(f -> 'slot' ->> 'from', 12, 8) :: time;
+
+slotUpto := substring(f -> 'slot' ->> 'to', 12, 8) :: time;
+
+slotDate := substring(f -> 'slot' ->> 'from', 0, 11) :: timestamp;
+
+isValid := false;
+
+FOR recurrence IN
+SELECT
+    *
+FROM
+    fulfilment.recurrence
+WHERE
+    "type" = 'PREORDER_PICKUP'
+    AND "isActive" = true
+    AND id IN (
+        SELECT
+            "recurrenceId"
+        FROM
+            fulfilment.brand_recurrence
+        WHERE
+            "brandId" = brandIdParam
+    ) LOOP IF recurrence.psql_rrule :: _rrule.rruleset @ > slotDate THEN FOR timeslot IN
+SELECT
+    *
+FROM
+    fulfilment."timeSlot"
+WHERE
+    "recurrenceId" = recurrence.id
+    AND "isActive" = true LOOP IF timeslot."from" < slotFrom
+    AND timeslot."to" > slotFrom THEN isValid := true;
+
+EXIT;
+
+END IF;
+
+END LOOP;
+
+IF isValid = false THEN err := 'No time slot available!';
+
+END IF;
+
+END IF;
+
+END LOOP;
+
+res := json_build_object('status', isValid, 'error', err);
+
+END IF;
+
+ELSE res := jsonb_build_object('status', false, 'error', 'Slot expired!');
+
+END IF;
+
+res := res || jsonb_build_object('type', 'fulfillment');
+
+RETURN res;
+
+END $ $;
+
+CREATE
+OR REPLACE FUNCTION "order"."walletAmountUsable"(cart "order".cart) RETURNS numeric LANGUAGE plpgsql STABLE AS $ function $ DECLARE setting record;
+
+temp record;
+
+itemTotal numeric;
+
+deliveryPrice numeric;
+
+tax numeric;
+
+discount numeric;
+
+totalPrice numeric;
+
+rate numeric;
+
+pointsAmount numeric := 0;
+
+amountUsable numeric := 0;
+
+balance numeric;
+
+BEGIN
+SELECT
+    *
+FROM
+    brands."storeSetting"
+WHERE
+    "identifier" = 'Loyalty Points Usage'
+    AND "type" = 'rewards' INTO setting;
+
+SELECT
+    *
+FROM
+    brands."brand_storeSetting"
+WHERE
+    "storeSettingId" = setting.id
+    AND "brandId" = cart."brandId" INTO temp;
+
+IF temp IS NOT NULL THEN setting := temp;
+
+END IF;
+
+SELECT
+    "order"."totalPrice"(cart.*) into totalPrice;
+
+amountUsable := totalPrice;
+
+-- if loyalty points are used
+IF cart."loyaltyPointsUsed" > 0 THEN
+SELECT
+    crm."getLoyaltyPointsConversionRate"(cart."brandId") INTO rate;
+
+pointsAmount := rate * cart."loyaltyPointsUsed";
+
+amountUsable := amountUsable - pointsAmount;
+
+END IF;
+
+SELECT
+    amount
+FROM
+    crm."wallet"
+WHERE
+    "keycloakId" = cart."customerKeycloakId"
+    AND "brandId" = cart."brandId" INTO balance;
+
+IF amountUsable > balance THEN amountUsable := balance;
+
+END IF;
+
+-- if usable changes after cart update, then update used amount
+IF cart."walletAmountUsed" > amountUsable THEN PERFORM crm."setWalletAmountUsedInCart"(cart.id, amountUsable);
+
+END IF;
+
+RETURN amountUsable;
+
+END;
+
+$ function $;
+
 CREATE VIEW products."customizableComponentOptions" AS
 SELECT
     t.id AS "customizableComponentId",
@@ -9,6 +1617,93 @@ SELECT
 FROM
     products."customizableProductComponent" t,
     LATERAL jsonb_array_elements(t.options) option(value);
+
+CREATE FUNCTION products."comboProductComponentCustomizableCartItem"(
+    componentoption products."customizableComponentOptions"
+) RETURNS jsonb LANGUAGE plpgsql STABLE AS $ $ DECLARE counter int;
+
+items jsonb [] := '{}';
+
+product record;
+
+option record;
+
+BEGIN
+SELECT
+    *
+FROM
+    products.product
+WHERE
+    id = componentOption."productId" INTO product;
+
+SELECT
+    *
+FROM
+    products."productOption"
+WHERE
+    id = componentOption."productOptionId" INTO option;
+
+counter := option.quantity;
+
+IF option."simpleRecipeYieldId" IS NOT NULL THEN WHILE counter >= 1 LOOP items := items || json_build_object(
+    'simpleRecipeYieldId',
+    option."simpleRecipeYieldId"
+) :: jsonb;
+
+counter := counter - 1;
+
+END LOOP;
+
+ELSEIF option."inventoryProductBundleId" IS NOT NULL THEN WHILE counter >= 1 LOOP items := items || json_build_object(
+    'inventoryProductBundleId',
+    option."inventoryProductBundleId"
+) :: jsonb;
+
+counter := counter - 1;
+
+END LOOP;
+
+END IF;
+
+RETURN jsonb_build_object(
+    'customizableProductComponentId',
+    componentOption."customizableComponentId",
+    'productOptionId',
+    componentOption."productOptionId",
+    'unitPrice',
+    componentOption.price,
+    'childs',
+    json_build_object('data', items)
+);
+
+END;
+
+$ $;
+
+CREATE FUNCTION products."comboProductComponentFullName"(component products."comboProductComponent") RETURNS text LANGUAGE plpgsql STABLE AS $ $ DECLARE productName text;
+
+childProductName text;
+
+BEGIN
+SELECT
+    name
+FROM
+    products.product
+WHERE
+    id = component."productId" INTO productName;
+
+SELECT
+    name
+FROM
+    products.product
+WHERE
+    id = component."linkedProductId" INTO childProductName;
+
+RETURN productName || ' - ' || childProductName || '(' || component.label || ')';
+
+END;
+
+$ $;
 
 CREATE VIEW products."comboComponentOptions" AS
 SELECT
@@ -22,241 +1717,361 @@ FROM
     products."comboProductComponent" t,
     LATERAL jsonb_array_elements(t.options) option(value);
 
-CREATE VIEW crm.view_brand_customer AS
-SELECT
-    brand_customer.id,
-    brand_customer."keycloakId",
-    brand_customer."brandId",
-    brand_customer.created_at,
-    brand_customer.updated_at,
-    brand_customer."isSubscriber",
-    brand_customer."subscriptionId",
-    brand_customer."subscriptionAddressId",
-    brand_customer."subscriptionPaymentMethodId",
-    brand_customer."isAutoSelectOptOut",
-    brand_customer."isSubscriberTimeStamp",
-    brand_customer."subscriptionServingId",
-    brand_customer."subscriptionItemCountId",
-    brand_customer."subscriptionTitleId",
-    (
-        SELECT
-            subscription."customerSubscriptionReport"(
-                brand_customer.id,
-                'All' :: text
-            ) AS "customerSubscriptionReport"
-    ) AS "allSubscriptionOccurences",
-    (
-        SELECT
-            subscription."customerSubscriptionReport"(
-                brand_customer.id,
-                'Skipped' :: text
-            ) AS "customerSubscriptionReport"
-    ) AS "skippedSubscriptionOccurences"
-FROM
-    crm.brand_customer;
+CREATE FUNCTION products."comboProductComponentOptionCartItem"(componentoption products."comboComponentOptions") RETURNS jsonb LANGUAGE plpgsql STABLE AS $ $ DECLARE counter int;
 
-CREATE VIEW ingredient."ingredientProcessingView" AS
+items jsonb [] := '{}';
+
+product record;
+
+option record;
+
+BEGIN
 SELECT
-    "ingredientProcessing".id,
-    "ingredientProcessing"."processingName",
-    "ingredientProcessing"."ingredientId",
-    "ingredientProcessing"."nutritionalInfo",
-    "ingredientProcessing".cost,
-    "ingredientProcessing".created_at,
-    "ingredientProcessing".updated_at,
-    "ingredientProcessing"."isArchived",
-    concat(
-        (
-            SELECT
-                ingredient.name
-            FROM
-                ingredient.ingredient
-            WHERE
-                (
-                    ingredient.id = "ingredientProcessing"."ingredientId"
+    *
+FROM
+    products.product
+WHERE
+    id = componentOption."productId" INTO product;
+
+SELECT
+    *
+FROM
+    products."productOption"
+WHERE
+    id = componentOption."productOptionId" INTO option;
+
+counter := option.quantity;
+
+IF option."simpleRecipeYieldId" IS NOT NULL THEN WHILE counter >= 1 LOOP items := items || json_build_object(
+    'simpleRecipeYieldId',
+    option."simpleRecipeYieldId"
+) :: jsonb;
+
+counter := counter - 1;
+
+END LOOP;
+
+ELSEIF option."inventoryProductBundleId" IS NOT NULL THEN WHILE counter >= 1 LOOP items := items || json_build_object(
+    'inventoryProductBundleId',
+    option."inventoryProductBundleId"
+) :: jsonb;
+
+counter := counter - 1;
+
+END LOOP;
+
+END IF;
+
+RETURN jsonb_build_object(
+    'comboProductComponentId',
+    componentOption."comboComponentId",
+    'productOptionId',
+    componentOption."productOptionId",
+    'unitPrice',
+    componentOption.price,
+    'childs',
+    json_build_object('data', items)
+);
+
+END;
+
+$ $;
+
+CREATE FUNCTION products."customizableProductComponentFullName"(
+    component products."customizableProductComponent"
+) RETURNS text LANGUAGE plpgsql STABLE AS $ $ DECLARE productName text;
+
+childProductName text;
+
+BEGIN
+SELECT
+    name
+FROM
+    products.product
+WHERE
+    id = component."productId" INTO productName;
+
+SELECT
+    name
+FROM
+    products.product
+WHERE
+    id = component."linkedProductId" INTO childProductName;
+
+RETURN productName || ' - ' || childProductName;
+
+END;
+
+$ $;
+
+CREATE FUNCTION products."customizableProductComponentOptionCartItem"(
+    componentoption products."customizableComponentOptions"
+) RETURNS jsonb LANGUAGE plpgsql STABLE AS $ $ DECLARE counter int;
+
+items jsonb [] := '{}';
+
+product record;
+
+option record;
+
+BEGIN
+SELECT
+    *
+FROM
+    products.product
+WHERE
+    id = componentOption."productId" INTO product;
+
+SELECT
+    *
+FROM
+    products."productOption"
+WHERE
+    id = componentOption."productOptionId" INTO option;
+
+counter := option.quantity;
+
+IF option."simpleRecipeYieldId" IS NOT NULL THEN WHILE counter >= 1 LOOP items := items || json_build_object(
+    'simpleRecipeYieldId',
+    option."simpleRecipeYieldId"
+) :: jsonb;
+
+counter := counter - 1;
+
+END LOOP;
+
+ELSEIF option."inventoryProductBundleId" IS NOT NULL THEN WHILE counter >= 1 LOOP items := items || json_build_object(
+    'inventoryProductBundleId',
+    option."inventoryProductBundleId"
+) :: jsonb;
+
+counter := counter - 1;
+
+END LOOP;
+
+END IF;
+
+RETURN jsonb_build_object(
+    'productId',
+    product.id,
+    'unitPrice',
+    product.price,
+    'childs',
+    jsonb_build_object(
+        'data',
+        json_build_array(
+            json_build_object (
+                'customizableProductComponentId',
+                componentOption."customizableComponentId",
+                'productOptionId',
+                componentOption."productOptionId",
+                'unitPrice',
+                componentOption.price,
+                'childs',
+                json_build_object(
+                    'data',
+                    items
                 )
-        ),
-        ' - ',
-        "ingredientProcessing"."processingName"
-    ) AS "displayName"
-FROM
-    ingredient."ingredientProcessing";
-
-CREATE VIEW ingredient."ingredientSachetView" AS
-SELECT
-    "ingredientSachet".id,
-    "ingredientSachet".quantity,
-    "ingredientSachet"."ingredientProcessingId",
-    "ingredientSachet"."ingredientId",
-    "ingredientSachet"."createdAt",
-    "ingredientSachet"."updatedAt",
-    "ingredientSachet".tracking,
-    "ingredientSachet".unit,
-    "ingredientSachet".visibility,
-    "ingredientSachet"."liveMOF",
-    "ingredientSachet"."isArchived",
-    concat(
-        (
-            SELECT
-                "ingredientProcessingView"."displayName"
-            FROM
-                ingredient."ingredientProcessingView"
-            WHERE
-                (
-                    "ingredientProcessingView".id = "ingredientSachet"."ingredientProcessingId"
-                )
-        ),
-        ' - ',
-        "ingredientSachet".quantity,
-        "ingredientSachet".unit
-    ) AS "displayName"
-FROM
-    ingredient."ingredientSachet";
-
-CREATE VIEW inventory."bulkItemView" AS
-SELECT
-    "bulkItem"."supplierItemId",
-    "bulkItem"."processingName",
-    (
-        SELECT
-            "supplierItem".name
-        FROM
-            inventory."supplierItem"
-        WHERE
-            ("supplierItem".id = "bulkItem"."supplierItemId")
-    ) AS "supplierItemName",
-    (
-        SELECT
-            "supplierItem"."supplierId"
-        FROM
-            inventory."supplierItem"
-        WHERE
-            ("supplierItem".id = "bulkItem"."supplierItemId")
-    ) AS "supplierId",
-    "bulkItem".id,
-    "bulkItem"."bulkDensity"
-FROM
-    inventory."bulkItem";
-
-CREATE VIEW inventory."sachetItemView" AS
-SELECT
-    "sachetItem".id,
-    "sachetItem"."unitSize",
-    "sachetItem"."bulkItemId",
-    (
-        SELECT
-            "bulkItemView"."supplierItemName"
-        FROM
-            inventory."bulkItemView"
-        WHERE
-            ("bulkItemView".id = "sachetItem"."bulkItemId")
-    ) AS "supplierItemName",
-    (
-        SELECT
-            "bulkItemView"."processingName"
-        FROM
-            inventory."bulkItemView"
-        WHERE
-            ("bulkItemView".id = "sachetItem"."bulkItemId")
-    ) AS "processingName",
-    (
-        SELECT
-            "bulkItemView"."supplierId"
-        FROM
-            inventory."bulkItemView"
-        WHERE
-            ("bulkItemView".id = "sachetItem"."bulkItemId")
-    ) AS "supplierId",
-    "sachetItem".unit,
-    (
-        SELECT
-            "bulkItem"."bulkDensity"
-        FROM
-            inventory."bulkItem"
-        WHERE
-            ("bulkItem".id = "sachetItem"."bulkItemId")
-    ) AS "bulkDensity"
-FROM
-    inventory."sachetItem";
-
-CREATE VIEW inventory."supplierItemView" AS
-SELECT
-    "supplierItem"."supplierId",
-    "supplierItem".name AS "supplierItemName",
-    "supplierItem"."unitSize",
-    "supplierItem".unit,
-    (
-        SELECT
-            "bulkItemView"."processingName"
-        FROM
-            inventory."bulkItemView"
-        WHERE
-            (
-                "bulkItemView".id = "supplierItem"."bulkItemAsShippedId"
             )
-    ) AS "processingName",
-    "supplierItem".id,
-    (
-        SELECT
-            "bulkItem"."bulkDensity"
-        FROM
-            inventory."bulkItem"
-        WHERE
-            (
-                "bulkItem".id = "supplierItem"."bulkItemAsShippedId"
-            )
-    ) AS "bulkDensity"
-FROM
-    inventory."supplierItem";
+        )
+    )
+);
 
-CREATE VIEW "onDemand"."collectionDetails" AS
-SELECT
-    collection.id,
-    collection.name,
-    collection."startTime",
-    collection."endTime",
-    collection.rrule,
-    "onDemand"."numberOfCategories"(collection.id) AS "categoriesCount",
-    "onDemand"."numberOfProducts"(collection.id) AS "productsCount",
-    collection.created_at,
-    collection.updated_at
-FROM
-    "onDemand".collection;
+END;
 
-CREATE VIEW "onDemand"."modifierCategoryOptionView" AS
+$ $;
+
+CREATE FUNCTION products."getProductType"(pid integer) RETURNS text LANGUAGE plpgsql STABLE AS $ $ DECLARE productOption record;
+
+comboComponentsCount int;
+
+customizableOptionsCount int;
+
+BEGIN
 SELECT
-    "modifierCategoryOption".id,
-    "modifierCategoryOption".name,
-    "modifierCategoryOption"."originalName",
-    "modifierCategoryOption".price,
-    "modifierCategoryOption".discount,
-    "modifierCategoryOption".quantity,
-    "modifierCategoryOption".image,
-    "modifierCategoryOption"."isActive",
-    "modifierCategoryOption"."isVisible",
-    "modifierCategoryOption"."operationConfigId",
-    "modifierCategoryOption"."modifierCategoryId",
-    "modifierCategoryOption"."sachetItemId",
-    "modifierCategoryOption"."ingredientSachetId",
-    "modifierCategoryOption"."simpleRecipeYieldId",
-    "modifierCategoryOption".created_at,
-    "modifierCategoryOption".updated_at,
-    concat(
-        (
-            SELECT
-                "modifierCategory".name
-            FROM
-                "onDemand"."modifierCategory"
-            WHERE
-                (
-                    "modifierCategory".id = "modifierCategoryOption"."modifierCategoryId"
+    *
+FROM
+    products."productOption"
+WHERE
+    id = pId INTO productOption
+LIMIT
+    1;
+
+SELECT
+    COUNT(*)
+FROM
+    products."customizableProductOption"
+WHERE
+    "productId" = pId INTO customizableOptionsCount;
+
+SELECT
+    COUNT(*)
+FROM
+    products."comboProductComponent"
+WHERE
+    "productId" = pId INTO comboComponentsCount;
+
+IF productOption."sachetItemId" IS NOT NULL
+OR productOption."supplierItemId" IS NOT NULL THEN RETURN 'inventoryProduct';
+
+ELSIF productOption."simpleRecipeYieldId" IS NOT NULL THEN RETURN 'simpleRecipeProduct';
+
+ELSEIF customizableOptionsCount > 0 THEN RETURN 'customizableProduct';
+
+ELSEIF comboComponentsCount > 0 THEN RETURN 'comboProduct';
+
+ELSE RETURN 'none';
+
+END IF;
+
+END;
+
+$ $;
+
+CREATE FUNCTION products."isProductValid"(product products.product) RETURNS jsonb LANGUAGE plpgsql STABLE AS $ $ DECLARE component record;
+
+isValid boolean := true;
+
+message text := '';
+
+counter int := 0;
+
+BEGIN RETURN jsonb_build_object('status', isValid, 'error', message);
+
+END $ $;
+
+CREATE FUNCTION products."productCartItemById"(optionid integer) RETURNS jsonb LANGUAGE plpgsql STABLE AS $ $ DECLARE counter int;
+
+items jsonb [] := '{}';
+
+option products."productOption";
+
+product products."product";
+
+BEGIN
+SELECT
+    * INTO option
+FROM
+    products."productOption"
+WHERE
+    id = optionId;
+
+SELECT
+    *
+FROM
+    products.product
+WHERE
+    id = option."productId" INTO product;
+
+counter := option.quantity;
+
+IF option."simpleRecipeYieldId" IS NOT NULL THEN WHILE counter >= 1 LOOP items := items || json_build_object(
+    'simpleRecipeYieldId',
+    option."simpleRecipeYieldId"
+) :: jsonb;
+
+counter := counter - 1;
+
+END LOOP;
+
+ELSEIF option."inventoryProductBundleId" IS NOT NULL THEN WHILE counter >= 1 LOOP items := items || json_build_object(
+    'inventoryProductBundleId',
+    option."inventoryProductBundleId"
+) :: jsonb;
+
+counter := counter - 1;
+
+END LOOP;
+
+END IF;
+
+RETURN json_build_object(
+    'productId',
+    product.id,
+    'childs',
+    jsonb_build_object(
+        'data',
+        json_build_array(
+            json_build_object (
+                'productOptionId',
+                option.id,
+                'unitPrice',
+                0,
+                'childs',
+                json_build_object(
+                    'data',
+                    items
                 )
-        ),
-        ' - ',
-        "modifierCategoryOption".name
-    ) AS "displayName"
+            )
+        )
+    )
+);
+
+END $ $;
+
+CREATE FUNCTION products."productOptionCartItem"(option products."productOption") RETURNS jsonb LANGUAGE plpgsql STABLE AS $ $ DECLARE counter int;
+
+items jsonb [] := '{}';
+
+product products."product";
+
+BEGIN
+SELECT
+    *
 FROM
-    "onDemand"."modifierCategoryOption";
+    products.product
+WHERE
+    id = option."productId" INTO product;
+
+counter := option.quantity;
+
+IF option."simpleRecipeYieldId" IS NOT NULL THEN WHILE counter >= 1 LOOP items := items || json_build_object(
+    'simpleRecipeYieldId',
+    option."simpleRecipeYieldId"
+) :: jsonb;
+
+counter := counter - 1;
+
+END LOOP;
+
+ELSEIF option."inventoryProductBundleId" IS NOT NULL THEN WHILE counter >= 1 LOOP items := items || json_build_object(
+    'inventoryProductBundleId',
+    option."inventoryProductBundleId"
+) :: jsonb;
+
+counter := counter - 1;
+
+END LOOP;
+
+END IF;
+
+RETURN json_build_object(
+    'productId',
+    product.id,
+    'unitPrice',
+    product.price,
+    'childs',
+    jsonb_build_object(
+        'data',
+        json_build_array(
+            json_build_object (
+                'productOptionId',
+                option.id,
+                'unitPrice',
+                option.price,
+                'childs',
+                json_build_object(
+                    'data',
+                    items
+                )
+            )
+        )
+    )
+);
+
+END;
+
+$ $;
 
 CREATE VIEW products."productOptionView" AS
 SELECT
@@ -1493,881 +3308,3 @@ SELECT
     ) AS "totalSubscribers"
 FROM
     subscription."subscriptionTitle";
-
-
-
--- datahub_schema."columns" source
-
-CREATE OR REPLACE VIEW datahub_schema."columns"
-AS SELECT columns.table_catalog,
-    columns.table_schema,
-    columns.table_name,
-    columns.column_name,
-    columns.ordinal_position,
-    columns.column_default,
-    columns.is_nullable,
-    columns.data_type,
-    columns.character_maximum_length,
-    columns.character_octet_length,
-    columns.numeric_precision,
-    columns.numeric_precision_radix,
-    columns.numeric_scale,
-    columns.datetime_precision,
-    columns.interval_type,
-    columns.interval_precision,
-    columns.character_set_catalog,
-    columns.character_set_schema,
-    columns.character_set_name,
-    columns.collation_catalog,
-    columns.collation_schema,
-    columns.collation_name,
-    columns.domain_catalog,
-    columns.domain_schema,
-    columns.domain_name,
-    columns.udt_catalog,
-    columns.udt_schema,
-    columns.udt_name,
-    columns.scope_catalog,
-    columns.scope_schema,
-    columns.scope_name,
-    columns.maximum_cardinality,
-    columns.dtd_identifier,
-    columns.is_self_referencing,
-    columns.is_identity,
-    columns.identity_generation,
-    columns.identity_start,
-    columns.identity_increment,
-    columns.identity_maximum,
-    columns.identity_minimum,
-    columns.identity_cycle,
-    columns.is_generated,
-    columns.generation_expression,
-    columns.is_updatable,
-    ( SELECT concat('"', columns.table_schema, '"."', columns.table_name, '"."', columns.column_name, '"') AS concat) AS column_reference,
-    ( SELECT concat('"', columns.table_schema, '"."', columns.table_name, '"') AS concat) AS table_reference,
-    ( SELECT concat('"', columns.table_schema, '"') AS concat) AS schema_reference
-   FROM information_schema.columns
-  WHERE columns.table_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema.columns_privileges source
-
-CREATE OR REPLACE VIEW datahub_schema.columns_privileges
-AS SELECT columns.table_catalog,
-    columns.table_schema,
-    columns.table_name,
-    columns.column_name,
-    columns.ordinal_position,
-    columns.column_default,
-    columns.is_nullable,
-    columns.data_type,
-    columns.character_maximum_length,
-    columns.character_octet_length,
-    columns.numeric_precision,
-    columns.numeric_precision_radix,
-    columns.numeric_scale,
-    columns.datetime_precision,
-    columns.interval_type,
-    columns.interval_precision,
-    columns.character_set_catalog,
-    columns.character_set_schema,
-    columns.character_set_name,
-    columns.collation_catalog,
-    columns.collation_schema,
-    columns.collation_name,
-    columns.domain_catalog,
-    columns.domain_schema,
-    columns.domain_name,
-    columns.udt_catalog,
-    columns.udt_schema,
-    columns.udt_name,
-    columns.scope_catalog,
-    columns.scope_schema,
-    columns.scope_name,
-    columns.maximum_cardinality,
-    columns.dtd_identifier,
-    columns.is_self_referencing,
-    columns.is_identity,
-    columns.identity_generation,
-    columns.identity_start,
-    columns.identity_increment,
-    columns.identity_maximum,
-    columns.identity_minimum,
-    columns.identity_cycle,
-    columns.is_generated,
-    columns.generation_expression,
-    columns.is_updatable,
-    ( SELECT concat('"', columns.table_schema, '"."', columns.table_name, '"."', columns.column_name, '"') AS concat) AS column_reference,
-    ( SELECT concat('"', columns.table_schema, '"."', columns.table_name, '"') AS concat) AS table_reference,
-    ( SELECT concat('"', columns.table_schema, '"') AS concat) AS schema_reference
-   FROM information_schema.columns
-  WHERE columns.table_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema.constraint_column_usage source
-
-CREATE OR REPLACE VIEW datahub_schema.constraint_column_usage
-AS SELECT columns.table_catalog,
-    columns.table_schema,
-    columns.table_name,
-    columns.column_name,
-    columns.ordinal_position,
-    columns.column_default,
-    columns.is_nullable,
-    columns.data_type,
-    columns.character_maximum_length,
-    columns.character_octet_length,
-    columns.numeric_precision,
-    columns.numeric_precision_radix,
-    columns.numeric_scale,
-    columns.datetime_precision,
-    columns.interval_type,
-    columns.interval_precision,
-    columns.character_set_catalog,
-    columns.character_set_schema,
-    columns.character_set_name,
-    columns.collation_catalog,
-    columns.collation_schema,
-    columns.collation_name,
-    columns.domain_catalog,
-    columns.domain_schema,
-    columns.domain_name,
-    columns.udt_catalog,
-    columns.udt_schema,
-    columns.udt_name,
-    columns.scope_catalog,
-    columns.scope_schema,
-    columns.scope_name,
-    columns.maximum_cardinality,
-    columns.dtd_identifier,
-    columns.is_self_referencing,
-    columns.is_identity,
-    columns.identity_generation,
-    columns.identity_start,
-    columns.identity_increment,
-    columns.identity_maximum,
-    columns.identity_minimum,
-    columns.identity_cycle,
-    columns.is_generated,
-    columns.generation_expression,
-    columns.is_updatable,
-    ( SELECT concat('"', columns.table_schema, '"."', columns.table_name, '"."', columns.column_name, '"') AS concat) AS column_reference,
-    ( SELECT concat('"', columns.table_schema, '"."', columns.table_name, '"') AS concat) AS table_reference,
-    ( SELECT concat('"', columns.table_schema, '"') AS concat) AS schema_reference
-   FROM information_schema.columns
-  WHERE columns.table_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema.constraint_table_usage source
-
-CREATE OR REPLACE VIEW datahub_schema.constraint_table_usage
-AS SELECT columns.table_catalog,
-    columns.table_schema,
-    columns.table_name,
-    columns.column_name,
-    columns.ordinal_position,
-    columns.column_default,
-    columns.is_nullable,
-    columns.data_type,
-    columns.character_maximum_length,
-    columns.character_octet_length,
-    columns.numeric_precision,
-    columns.numeric_precision_radix,
-    columns.numeric_scale,
-    columns.datetime_precision,
-    columns.interval_type,
-    columns.interval_precision,
-    columns.character_set_catalog,
-    columns.character_set_schema,
-    columns.character_set_name,
-    columns.collation_catalog,
-    columns.collation_schema,
-    columns.collation_name,
-    columns.domain_catalog,
-    columns.domain_schema,
-    columns.domain_name,
-    columns.udt_catalog,
-    columns.udt_schema,
-    columns.udt_name,
-    columns.scope_catalog,
-    columns.scope_schema,
-    columns.scope_name,
-    columns.maximum_cardinality,
-    columns.dtd_identifier,
-    columns.is_self_referencing,
-    columns.is_identity,
-    columns.identity_generation,
-    columns.identity_start,
-    columns.identity_increment,
-    columns.identity_maximum,
-    columns.identity_minimum,
-    columns.identity_cycle,
-    columns.is_generated,
-    columns.generation_expression,
-    columns.is_updatable,
-    ( SELECT concat('"', columns.table_schema, '"."', columns.table_name, '"') AS concat) AS table_reference,
-    ( SELECT concat('"', columns.table_schema, '"') AS concat) AS schema_reference
-   FROM information_schema.columns
-  WHERE columns.table_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema.event_invocation_logs source
-
-CREATE OR REPLACE VIEW datahub_schema.event_invocation_logs
-AS SELECT event_invocation_logs.id,
-    event_invocation_logs.event_id,
-    event_invocation_logs.status,
-    event_invocation_logs.request,
-    event_invocation_logs.response,
-    event_invocation_logs.created_at
-   FROM hdb_catalog.event_invocation_logs;
-
-
--- datahub_schema.event_log source
-
-CREATE OR REPLACE VIEW datahub_schema.event_log
-AS SELECT event_log.id,
-    event_log.schema_name,
-    event_log.table_name,
-    event_log.trigger_name,
-    event_log.payload,
-    event_log.delivered,
-    event_log.error,
-    event_log.tries,
-    event_log.created_at,
-    event_log.locked,
-    event_log.next_retry_at,
-    event_log.archived
-   FROM hdb_catalog.event_log;
-
-
--- datahub_schema.event_triggers source
-
-CREATE OR REPLACE VIEW datahub_schema.event_triggers
-AS SELECT event_triggers.name,
-    event_triggers.type,
-    event_triggers.schema_name,
-    event_triggers.table_name,
-    event_triggers.configuration,
-    event_triggers.comment
-   FROM hdb_catalog.event_triggers;
-
-
--- datahub_schema.hdb_action source
-
-CREATE OR REPLACE VIEW datahub_schema.hdb_action
-AS SELECT hdb_action.action_name,
-    hdb_action.action_defn,
-    hdb_action.comment,
-    hdb_action.is_system_defined
-   FROM hdb_catalog.hdb_action;
-
-
--- datahub_schema.hdb_action_log source
-
-CREATE OR REPLACE VIEW datahub_schema.hdb_action_log
-AS SELECT hdb_action_log.id,
-    hdb_action_log.action_name,
-    hdb_action_log.input_payload,
-    hdb_action_log.request_headers,
-    hdb_action_log.session_variables,
-    hdb_action_log.response_payload,
-    hdb_action_log.errors,
-    hdb_action_log.created_at,
-    hdb_action_log.response_received_at,
-    hdb_action_log.status
-   FROM hdb_catalog.hdb_action_log;
-
-
--- datahub_schema.hdb_action_permission source
-
-CREATE OR REPLACE VIEW datahub_schema.hdb_action_permission
-AS SELECT hdb_action_permission.action_name,
-    hdb_action_permission.role_name,
-    hdb_action_permission.definition,
-    hdb_action_permission.comment
-   FROM hdb_catalog.hdb_action_permission;
-
-
--- datahub_schema.hdb_computed_field source
-
-CREATE OR REPLACE VIEW datahub_schema.hdb_computed_field
-AS SELECT hdb_computed_field.table_schema,
-    hdb_computed_field.table_name,
-    hdb_computed_field.computed_field_name,
-    hdb_computed_field.definition,
-    hdb_computed_field.comment
-   FROM hdb_catalog.hdb_computed_field;
-
-
--- datahub_schema.hdb_cron_event_invocation_logs source
-
-CREATE OR REPLACE VIEW datahub_schema.hdb_cron_event_invocation_logs
-AS SELECT hdb_cron_event_invocation_logs.id,
-    hdb_cron_event_invocation_logs.event_id,
-    hdb_cron_event_invocation_logs.status,
-    hdb_cron_event_invocation_logs.request,
-    hdb_cron_event_invocation_logs.response,
-    hdb_cron_event_invocation_logs.created_at
-   FROM hdb_catalog.hdb_cron_event_invocation_logs;
-
-
--- datahub_schema.hdb_cron_events source
-
-CREATE OR REPLACE VIEW datahub_schema.hdb_cron_events
-AS SELECT hdb_cron_events.id,
-    hdb_cron_events.trigger_name,
-    hdb_cron_events.scheduled_time,
-    hdb_cron_events.status,
-    hdb_cron_events.tries,
-    hdb_cron_events.created_at,
-    hdb_cron_events.next_retry_at
-   FROM hdb_catalog.hdb_cron_events;
-
-
--- datahub_schema.hdb_cron_triggers source
-
-CREATE OR REPLACE VIEW datahub_schema.hdb_cron_triggers
-AS SELECT hdb_cron_triggers.name,
-    hdb_cron_triggers.webhook_conf,
-    hdb_cron_triggers.cron_schedule,
-    hdb_cron_triggers.payload,
-    hdb_cron_triggers.retry_conf,
-    hdb_cron_triggers.header_conf,
-    hdb_cron_triggers.include_in_metadata,
-    hdb_cron_triggers.comment
-   FROM hdb_catalog.hdb_cron_triggers;
-
-
--- datahub_schema.hdb_custom_types source
-
-CREATE OR REPLACE VIEW datahub_schema.hdb_custom_types
-AS SELECT hdb_custom_types.custom_types
-   FROM hdb_catalog.hdb_custom_types;
-
-
--- datahub_schema.hdb_function source
-
-CREATE OR REPLACE VIEW datahub_schema.hdb_function
-AS SELECT hdb_function.function_schema,
-    hdb_function.function_name,
-    hdb_function.configuration,
-    hdb_function.is_system_defined
-   FROM hdb_catalog.hdb_function;
-
-
--- datahub_schema.hdb_permission source
-
-CREATE OR REPLACE VIEW datahub_schema.hdb_permission
-AS SELECT hdb_permission.table_schema,
-    hdb_permission.table_name,
-    hdb_permission.role_name,
-    hdb_permission.perm_type,
-    hdb_permission.perm_def,
-    hdb_permission.comment,
-    hdb_permission.is_system_defined
-   FROM hdb_catalog.hdb_permission;
-
-
--- datahub_schema.hdb_relationship source
-
-CREATE OR REPLACE VIEW datahub_schema.hdb_relationship
-AS SELECT hdb_relationship.table_schema,
-    hdb_relationship.table_name,
-    hdb_relationship.rel_name,
-    hdb_relationship.rel_type,
-    hdb_relationship.rel_def,
-    hdb_relationship.comment,
-    hdb_relationship.is_system_defined
-   FROM hdb_catalog.hdb_relationship;
-
-
--- datahub_schema.hdb_remote_relationship source
-
-CREATE OR REPLACE VIEW datahub_schema.hdb_remote_relationship
-AS SELECT hdb_remote_relationship.remote_relationship_name,
-    hdb_remote_relationship.table_schema,
-    hdb_remote_relationship.table_name,
-    hdb_remote_relationship.definition
-   FROM hdb_catalog.hdb_remote_relationship;
-
-
--- datahub_schema.hdb_scheduled_event_invocation_logs source
-
-CREATE OR REPLACE VIEW datahub_schema.hdb_scheduled_event_invocation_logs
-AS SELECT hdb_scheduled_event_invocation_logs.id,
-    hdb_scheduled_event_invocation_logs.event_id,
-    hdb_scheduled_event_invocation_logs.status,
-    hdb_scheduled_event_invocation_logs.request,
-    hdb_scheduled_event_invocation_logs.response,
-    hdb_scheduled_event_invocation_logs.created_at
-   FROM hdb_catalog.hdb_scheduled_event_invocation_logs;
-
-
--- datahub_schema.hdb_scheduled_events source
-
-CREATE OR REPLACE VIEW datahub_schema.hdb_scheduled_events
-AS SELECT hdb_scheduled_events.id,
-    hdb_scheduled_events.webhook_conf,
-    hdb_scheduled_events.scheduled_time,
-    hdb_scheduled_events.retry_conf,
-    hdb_scheduled_events.payload,
-    hdb_scheduled_events.header_conf,
-    hdb_scheduled_events.status,
-    hdb_scheduled_events.tries,
-    hdb_scheduled_events.created_at,
-    hdb_scheduled_events.next_retry_at,
-    hdb_scheduled_events.comment
-   FROM hdb_catalog.hdb_scheduled_events;
-
-
--- datahub_schema.hdb_table source
-
-CREATE OR REPLACE VIEW datahub_schema.hdb_table
-AS SELECT hdb_table.table_schema,
-    hdb_table.table_name,
-    hdb_table.configuration,
-    hdb_table.is_system_defined,
-    hdb_table.is_enum,
-    ( SELECT concat('"', hdb_table.table_schema, '"."', hdb_table.table_name, '"') AS concat) AS table_reference,
-    ( SELECT concat('"', hdb_table.table_schema, '"') AS concat) AS schema_reference
-   FROM hdb_catalog.hdb_table;
-
-
--- datahub_schema.key_column_usage source
-
-CREATE OR REPLACE VIEW datahub_schema.key_column_usage
-AS SELECT columns.table_catalog,
-    columns.table_schema,
-    columns.table_name,
-    columns.column_name,
-    columns.ordinal_position,
-    columns.column_default,
-    columns.is_nullable,
-    columns.data_type,
-    columns.character_maximum_length,
-    columns.character_octet_length,
-    columns.numeric_precision,
-    columns.numeric_precision_radix,
-    columns.numeric_scale,
-    columns.datetime_precision,
-    columns.interval_type,
-    columns.interval_precision,
-    columns.character_set_catalog,
-    columns.character_set_schema,
-    columns.character_set_name,
-    columns.collation_catalog,
-    columns.collation_schema,
-    columns.collation_name,
-    columns.domain_catalog,
-    columns.domain_schema,
-    columns.domain_name,
-    columns.udt_catalog,
-    columns.udt_schema,
-    columns.udt_name,
-    columns.scope_catalog,
-    columns.scope_schema,
-    columns.scope_name,
-    columns.maximum_cardinality,
-    columns.dtd_identifier,
-    columns.is_self_referencing,
-    columns.is_identity,
-    columns.identity_generation,
-    columns.identity_start,
-    columns.identity_increment,
-    columns.identity_maximum,
-    columns.identity_minimum,
-    columns.identity_cycle,
-    columns.is_generated,
-    columns.generation_expression,
-    columns.is_updatable,
-    ( SELECT concat('"', columns.table_schema, '"."', columns.table_name, '"."', columns.column_name, '"') AS concat) AS column_reference,
-    ( SELECT concat('"', columns.table_schema, '"."', columns.table_name, '"') AS concat) AS table_reference,
-    ( SELECT concat('"', columns.table_schema, '"') AS concat) AS schema_reference
-   FROM information_schema.columns
-  WHERE columns.table_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema.referential_constraints source
-
-CREATE OR REPLACE VIEW datahub_schema.referential_constraints
-AS SELECT referential_constraints.constraint_catalog,
-    referential_constraints.constraint_schema,
-    referential_constraints.constraint_name,
-    referential_constraints.unique_constraint_catalog,
-    referential_constraints.unique_constraint_schema,
-    referential_constraints.unique_constraint_name,
-    referential_constraints.match_option,
-    referential_constraints.update_rule,
-    referential_constraints.delete_rule,
-    ( SELECT concat('"', referential_constraints.constraint_schema, '"."', referential_constraints.constraint_name, '"') AS concat) AS constraint_reference,
-    ( SELECT concat('"', referential_constraints.constraint_schema, '"') AS concat) AS constraint_schema_reference
-   FROM information_schema.referential_constraints
-  WHERE referential_constraints.unique_constraint_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema.remote_schemas source
-
-CREATE OR REPLACE VIEW datahub_schema.remote_schemas
-AS SELECT remote_schemas.id,
-    remote_schemas.name,
-    remote_schemas.definition,
-    remote_schemas.comment
-   FROM hdb_catalog.remote_schemas;
-
-
--- datahub_schema.role_column_grant source
-
-CREATE OR REPLACE VIEW datahub_schema.role_column_grant
-AS SELECT columns.table_catalog,
-    columns.table_schema,
-    columns.table_name,
-    columns.column_name,
-    columns.ordinal_position,
-    columns.column_default,
-    columns.is_nullable,
-    columns.data_type,
-    columns.character_maximum_length,
-    columns.character_octet_length,
-    columns.numeric_precision,
-    columns.numeric_precision_radix,
-    columns.numeric_scale,
-    columns.datetime_precision,
-    columns.interval_type,
-    columns.interval_precision,
-    columns.character_set_catalog,
-    columns.character_set_schema,
-    columns.character_set_name,
-    columns.collation_catalog,
-    columns.collation_schema,
-    columns.collation_name,
-    columns.domain_catalog,
-    columns.domain_schema,
-    columns.domain_name,
-    columns.udt_catalog,
-    columns.udt_schema,
-    columns.udt_name,
-    columns.scope_catalog,
-    columns.scope_schema,
-    columns.scope_name,
-    columns.maximum_cardinality,
-    columns.dtd_identifier,
-    columns.is_self_referencing,
-    columns.is_identity,
-    columns.identity_generation,
-    columns.identity_start,
-    columns.identity_increment,
-    columns.identity_maximum,
-    columns.identity_minimum,
-    columns.identity_cycle,
-    columns.is_generated,
-    columns.generation_expression,
-    columns.is_updatable,
-    ( SELECT concat('"', columns.table_schema, '"."', columns.table_name, '"."', columns.column_name, '"') AS concat) AS column_reference,
-    ( SELECT concat('"', columns.table_schema, '"."', columns.table_name, '"') AS concat) AS table_reference,
-    ( SELECT concat('"', columns.table_schema, '"') AS concat) AS schema_reference
-   FROM information_schema.columns
-  WHERE columns.table_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema."routines" source
-
-CREATE OR REPLACE VIEW datahub_schema."routines"
-AS SELECT routines.specific_catalog,
-    routines.specific_schema,
-    routines.specific_name,
-    routines.routine_catalog,
-    routines.routine_schema,
-    routines.routine_name,
-    routines.routine_type,
-    routines.module_catalog,
-    routines.module_schema,
-    routines.module_name,
-    routines.udt_catalog,
-    routines.udt_schema,
-    routines.udt_name,
-    routines.data_type,
-    routines.character_maximum_length,
-    routines.character_octet_length,
-    routines.character_set_catalog,
-    routines.character_set_schema,
-    routines.character_set_name,
-    routines.collation_catalog,
-    routines.collation_schema,
-    routines.collation_name,
-    routines.numeric_precision,
-    routines.numeric_precision_radix,
-    routines.numeric_scale,
-    routines.datetime_precision,
-    routines.interval_type,
-    routines.interval_precision,
-    routines.type_udt_catalog,
-    routines.type_udt_schema,
-    routines.type_udt_name,
-    routines.scope_catalog,
-    routines.scope_schema,
-    routines.scope_name,
-    routines.maximum_cardinality,
-    routines.dtd_identifier,
-    routines.routine_body,
-    routines.routine_definition,
-    routines.external_name,
-    routines.external_language,
-    routines.parameter_style,
-    routines.is_deterministic,
-    routines.sql_data_access,
-    routines.is_null_call,
-    routines.sql_path,
-    routines.schema_level_routine,
-    routines.max_dynamic_result_sets,
-    routines.is_user_defined_cast,
-    routines.is_implicitly_invocable,
-    routines.security_type,
-    routines.to_sql_specific_catalog,
-    routines.to_sql_specific_schema,
-    routines.to_sql_specific_name,
-    routines.as_locator,
-    routines.created,
-    routines.last_altered,
-    routines.new_savepoint_level,
-    routines.is_udt_dependent,
-    routines.result_cast_from_data_type,
-    routines.result_cast_as_locator,
-    routines.result_cast_char_max_length,
-    routines.result_cast_char_octet_length,
-    routines.result_cast_char_set_catalog,
-    routines.result_cast_char_set_schema,
-    routines.result_cast_char_set_name,
-    routines.result_cast_collation_catalog,
-    routines.result_cast_collation_schema,
-    routines.result_cast_collation_name,
-    routines.result_cast_numeric_precision,
-    routines.result_cast_numeric_precision_radix,
-    routines.result_cast_numeric_scale,
-    routines.result_cast_datetime_precision,
-    routines.result_cast_interval_type,
-    routines.result_cast_interval_precision,
-    routines.result_cast_type_udt_catalog,
-    routines.result_cast_type_udt_schema,
-    routines.result_cast_type_udt_name,
-    routines.result_cast_scope_catalog,
-    routines.result_cast_scope_schema,
-    routines.result_cast_scope_name,
-    routines.result_cast_maximum_cardinality,
-    routines.result_cast_dtd_identifier,
-    ( SELECT concat('"', routines.routine_schema, '"."', routines.routine_name, '"') AS concat) AS routine_reference,
-    ( SELECT concat('"', routines.routine_schema, '"') AS concat) AS routine_schema_reference
-   FROM information_schema.routines
-  WHERE routines.specific_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema.schemata source
-
-CREATE OR REPLACE VIEW datahub_schema.schemata
-AS SELECT schemata.catalog_name,
-    schemata.schema_name,
-    schemata.schema_owner,
-    schemata.default_character_set_catalog,
-    schemata.default_character_set_schema,
-    schemata.default_character_set_name,
-    schemata.sql_path,
-    ( SELECT concat('"', schemata.schema_name, '"') AS concat) AS schema_reference
-   FROM information_schema.schemata;
-
-
--- datahub_schema."sequences" source
-
-CREATE OR REPLACE VIEW datahub_schema."sequences"
-AS SELECT sequences.sequence_catalog,
-    sequences.sequence_schema,
-    sequences.sequence_name,
-    sequences.data_type,
-    sequences.numeric_precision,
-    sequences.numeric_precision_radix,
-    sequences.numeric_scale,
-    sequences.start_value,
-    sequences.minimum_value,
-    sequences.maximum_value,
-    sequences.increment,
-    sequences.cycle_option,
-    sequences.sequence_schema AS schema_reference
-   FROM information_schema.sequences
-  WHERE sequences.sequence_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema.table_constraints source
-
-CREATE OR REPLACE VIEW datahub_schema.table_constraints
-AS SELECT table_constraints.constraint_catalog,
-    table_constraints.constraint_schema,
-    table_constraints.constraint_name,
-    table_constraints.table_catalog,
-    table_constraints.table_schema,
-    table_constraints.table_name,
-    table_constraints.constraint_type,
-    table_constraints.is_deferrable,
-    table_constraints.initially_deferred,
-    table_constraints.enforced,
-    ( SELECT concat('"', table_constraints.table_schema, '"."', table_constraints.table_name, '"') AS concat) AS table_reference,
-    ( SELECT concat('"', table_constraints.table_schema, '"') AS concat) AS schema_reference
-   FROM information_schema.table_constraints
-  WHERE table_constraints.constraint_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema.table_privileges source
-
-CREATE OR REPLACE VIEW datahub_schema.table_privileges
-AS SELECT table_privileges.grantor,
-    table_privileges.grantee,
-    table_privileges.table_catalog,
-    table_privileges.table_schema,
-    table_privileges.table_name,
-    table_privileges.privilege_type,
-    table_privileges.is_grantable,
-    table_privileges.with_hierarchy,
-    ( SELECT concat('"', table_privileges.table_schema, '"."', table_privileges.table_name, '"') AS concat) AS table_reference,
-    ( SELECT concat('"', table_privileges.table_schema, '"') AS concat) AS schema_reference
-   FROM information_schema.table_privileges
-  WHERE table_privileges.table_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema."tables" source
-
-CREATE OR REPLACE VIEW datahub_schema."tables"
-AS SELECT tables.table_catalog,
-    tables.table_schema,
-    tables.table_name,
-    tables.table_type,
-    tables.self_referencing_column_name,
-    tables.reference_generation,
-    tables.user_defined_type_catalog,
-    tables.user_defined_type_schema,
-    tables.user_defined_type_name,
-    tables.is_insertable_into,
-    tables.is_typed,
-    tables.commit_action,
-    ( SELECT concat('"', tables.table_schema, '"."', tables.table_name, '"') AS concat) AS table_reference,
-    ( SELECT concat('"', tables.table_schema, '"') AS concat) AS schema_reference
-   FROM information_schema.tables
-  WHERE tables.table_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema.triggered_update_column source
-
-CREATE OR REPLACE VIEW datahub_schema.triggered_update_column
-AS SELECT triggers.trigger_catalog,
-    triggers.trigger_schema,
-    triggers.trigger_name,
-    triggers.event_manipulation,
-    triggers.event_object_catalog,
-    triggers.event_object_schema,
-    triggers.event_object_table,
-    triggers.action_order,
-    triggers.action_condition,
-    triggers.action_statement,
-    triggers.action_orientation,
-    triggers.action_timing,
-    triggers.action_reference_old_table,
-    triggers.action_reference_new_table,
-    triggers.action_reference_old_row,
-    triggers.action_reference_new_row,
-    triggers.created,
-    ( SELECT concat('"', triggers.trigger_schema, '"."', triggers.trigger_name, '"') AS concat) AS trigger_reference,
-    ( SELECT concat('"', triggers.trigger_schema, '"') AS concat) AS schema_reference
-   FROM information_schema.triggers
-  WHERE triggers.trigger_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema.triggers source
-
-CREATE OR REPLACE VIEW datahub_schema.triggers
-AS SELECT triggers.trigger_catalog,
-    triggers.trigger_schema,
-    triggers.trigger_name,
-    triggers.event_manipulation,
-    triggers.event_object_catalog,
-    triggers.event_object_schema,
-    triggers.event_object_table,
-    triggers.action_order,
-    triggers.action_condition,
-    triggers.action_statement,
-    triggers.action_orientation,
-    triggers.action_timing,
-    triggers.action_reference_old_table,
-    triggers.action_reference_new_table,
-    triggers.action_reference_old_row,
-    triggers.action_reference_new_row,
-    triggers.created,
-    ( SELECT concat('"', triggers.trigger_schema, '"."', triggers.trigger_name, '"') AS concat) AS trigger_reference,
-    ( SELECT concat('"', triggers.trigger_schema, '"') AS concat) AS schema_reference
-   FROM information_schema.triggers
-  WHERE triggers.trigger_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema.view_column_usage source
-
-CREATE OR REPLACE VIEW datahub_schema.view_column_usage
-AS SELECT view_column_usage.view_catalog,
-    view_column_usage.view_schema,
-    view_column_usage.view_name,
-    view_column_usage.table_catalog,
-    view_column_usage.table_schema,
-    view_column_usage.table_name,
-    view_column_usage.column_name,
-    ( SELECT concat('"', view_column_usage.view_schema, '"."', view_column_usage.view_name, '"') AS concat) AS view_reference,
-    ( SELECT concat('"', view_column_usage.table_schema, '"."', view_column_usage.table_name, '"') AS concat) AS table_reference,
-    ( SELECT concat('"', view_column_usage.view_schema, '"') AS concat) AS view_schema_reference,
-    ( SELECT concat('"', view_column_usage.table_schema, '"') AS concat) AS table_schema_reference
-   FROM information_schema.view_column_usage
-  WHERE view_column_usage.view_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema.view_routine_usage source
-
-CREATE OR REPLACE VIEW datahub_schema.view_routine_usage
-AS SELECT view_routine_usage.table_catalog,
-    view_routine_usage.table_schema,
-    view_routine_usage.table_name,
-    view_routine_usage.specific_catalog,
-    view_routine_usage.specific_schema,
-    view_routine_usage.specific_name,
-    ( SELECT concat('"', view_routine_usage.table_schema, '"."', view_routine_usage.table_name, '"') AS concat) AS table_reference,
-    ( SELECT concat('"', view_routine_usage.table_schema, '"') AS concat) AS table_schema_reference
-   FROM information_schema.view_routine_usage
-  WHERE view_routine_usage.table_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema.view_table_usage source
-
-CREATE OR REPLACE VIEW datahub_schema.view_table_usage
-AS SELECT view_table_usage.view_catalog,
-    view_table_usage.view_schema,
-    view_table_usage.view_name,
-    view_table_usage.table_catalog,
-    view_table_usage.table_schema,
-    view_table_usage.table_name,
-    ( SELECT concat('"', view_table_usage.view_schema, '"."', view_table_usage.view_name, '"') AS concat) AS view_reference,
-    ( SELECT concat('"', view_table_usage.table_schema, '"."', view_table_usage.table_name, '"') AS concat) AS table_reference,
-    ( SELECT concat('"', view_table_usage.view_schema, '"') AS concat) AS view_schema_reference,
-    ( SELECT concat('"', view_table_usage.table_schema, '"') AS concat) AS table_schema_reference
-   FROM information_schema.view_table_usage
-  WHERE view_table_usage.table_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);
-
-
--- datahub_schema."views" source
-
-CREATE OR REPLACE VIEW datahub_schema."views"
-AS SELECT views.table_catalog,
-    views.table_schema,
-    views.table_name,
-    views.view_definition,
-    views.check_option,
-    views.is_updatable,
-    views.is_insertable_into,
-    views.is_trigger_updatable,
-    views.is_trigger_deletable,
-    views.is_trigger_insertable_into,
-    ( SELECT concat('"', views.table_schema, '"."', views.table_name, '"') AS concat) AS view_reference,
-    ( SELECT concat('"', views.table_schema, '"') AS concat) AS schema_reference
-   FROM information_schema.views
-  WHERE views.table_schema::name <> ALL (ARRAY['pg_catalog'::name, 'information_schema'::name]);

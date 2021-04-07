@@ -32,6 +32,13 @@ type Mutation {
 }
 
 
+type Mutation {
+  sendStripeInvoice (
+    id: String!
+  ): SendStripeInvoiceResponse!
+}
+
+
 
 
 input EmailInput {
@@ -71,5 +78,10 @@ type ProcessRewardsResponse {
 type EmailOutput {
   success : Boolean!
   message : String!
+}
+
+type SendStripeInvoiceResponse {
+  message : String!
+  success : Boolean!
 }
 
