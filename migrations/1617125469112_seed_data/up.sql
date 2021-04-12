@@ -346,7 +346,7 @@ VALUES (1000, 'Visual', 'priceDisplay'),
    (1016, 'rewards', 'Loyalty Points'),
    (1017, 'rewards', 'Coupons'),
    (1018, 'rewards', 'Referral'),
-   (1019, 'Email Notification', 'email');
+   (1019, 'email', 'Email Notification');
 INSERT INTO brands."brand_subscriptionStoreSetting" ("brandId", "subscriptionStoreSettingId", value)
 VALUES (
       1000,
