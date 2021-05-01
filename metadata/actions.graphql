@@ -1,5 +1,5 @@
 type Mutation {
-  createPrintJob (
+  createPrintJob(
     url: String!
     printerId: Int!
     title: String!
@@ -8,68 +8,65 @@ type Mutation {
   ): PrintResponse
 }
 
-
 type Query {
-  printJobs (
-    printerId: Int
-    printJobId: Int
-  ): [PrintJobs]!
+  printJobs(printerId: Int, printJobId: Int): [PrintJobs]!
 }
 
-
 type Mutation {
-  processRewards (
+  processRewards(
     rewardIds: [Int!]!
     keycloakId: String!
   ): ProcessRewardsResponse
 }
 
-
 type Mutation {
-  sendEmail (
-    emailInput: EmailInput!
-  ): EmailOutput
+  sendEmail(emailInput: EmailInput!): EmailOutput
 }
 
-
-
+type Mutation {
+  sendStripeInvoice(id: String!): SendStripeInvoiceResponse!
+}
 
 input EmailInput {
-  to : String!
-  from : String!
-  subject : String!
-  html : String!
-  attachments : [Attachment]!
+  to: String!
+  from: String!
+  subject: String!
+  html: String!
+  attachments: [Attachment]!
 }
 
 input Attachment {
-  filename : String
-  path : String!
+  filename: String
+  path: String!
 }
 
 type PrintResponse {
-  success : Boolean!
-  message : String!
+  success: Boolean!
+  message: String!
 }
 
 type PrintJobs {
-  contentType : String!
-  createTimestamp : String!
-  expireAt : String!
-  id : Int!
-  source : String
-  state : String!
-  title : String
-  printer : jsonb
+  contentType: String!
+  createTimestamp: String!
+  expireAt: String!
+  id: Int!
+  source: String
+  state: String!
+  title: String
+  printer: jsonb
 }
 
 type ProcessRewardsResponse {
-  success : Boolean
-  message : String
+  success: Boolean
+  message: String
 }
 
 type EmailOutput {
-  success : Boolean!
-  message : String!
+  success: Boolean!
+  message: String!
 }
 
+type SendStripeInvoiceResponse {
+  message: String!
+  success: Boolean!
+}

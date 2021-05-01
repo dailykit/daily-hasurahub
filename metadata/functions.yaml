@@ -34,3 +34,6 @@
 - function:
     schema: order
     name: duplicateCartItem
+- function:
+    schema: simpleRecipe
+    name: deriveIngredientSachets

@@ -1,7 +1,7 @@
 version: 2
-endpoint: https://mumbai.dailykit.org/datahub
+endpoint: https://test.dailykit.org/datahub
 metadata_directory: metadata
 admin_secret: 60ea76ab-5ab6-4f09-ad44-efeb00f978ce
 actions:
-   kind: synchronous
-   handler_webhook_baseurl: http://localhost:3000
+  kind: synchronous
+  handler_webhook_baseurl: http://localhost:3000
